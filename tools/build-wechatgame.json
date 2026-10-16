@@ -1,0 +1,17 @@
+{
+  "platform": "wechatgame",
+  "buildPath": "project://build",
+  "outputName": "wechatgame",
+  "debug": true,
+  "md5Cache": false,
+  "sourceMaps": false,
+  "startScene": "f9cefdf9-00be-4e53-8157-4489835b225f",
+  "scenes": [
+    { "url": "db://assets/main.scene", "uuid": "f9cefdf9-00be-4e53-8157-4489835b225f" }
+  ],
+  "packages": {
+    "wechatgame": {
+      "orientation": "portrait"
+    }
+  }
+}

@@ -1,5 +1,9 @@
 {
   "name": "pixel-town",
+  "uuid": "1773db04-d618-40a5-a5cd-50ec4e5c7e4c",
+  "creator": {
+    "version": "3.8.8"
+  },
   "private": true,
   "description": "像素小镇：2D 像素风小镇经营养成微信小游戏",
   "scripts": {
