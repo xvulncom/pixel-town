@@ -1,0 +1,19 @@
+# Cocos Creator 生成目录
+library/
+temp/
+build/
+local/
+profiles/
+
+# 依赖
+node_modules/
+
+# 系统和编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 凭据不进仓库（AppSecret 等放 ~/密钥/）
+.env
+*.secret.*

@@ -1,0 +1,79 @@
+// 新开一局、存档读写。
+
+import { World } from './defs';
+import { GameState } from './types';
+import { seasonAt } from './calendar';
+import { emptyPlot } from './farm';
+import { inSeason } from './region';
+import { seedItem } from './inventory';
+import { newNpcState } from './npc';
+
+export const SAVE_VERSION = 1;
+export const START_GOLD = 300;
+export const START_PLOTS = 6;
+export const STARTER_SEEDS = 5;
+
+/** 开局。regionId 是玩家选的老家。 */
+export function newGame(world: World, nowMs: number, seed: string, regionId: string): GameState {
+    const region = world.regions[regionId];
+    if (!region) {
+        throw new Error(`unknown region ${regionId}`);
+    }
+    const season = seasonAt(nowMs);
+
+    // 开局送本地当季最便宜的普通作物种子，让玩家第一分钟就能种（东北冬天地冻着，不送）
+    const starter = region.crops
+        .map((id) => world.crops[id])
+        .filter((c) => c && inSeason(world, region, c.id, season))
+        .sort((a, b) => a.seedPrice - b.seedPrice)[0];
+
+    const npcs: GameState['npcs'] = {};
+    for (const def of Object.values(world.npcs)) {
+        npcs[def.id] = newNpcState(def);
+    }
+
+    return {
+        version: SAVE_VERSION,
+        seed,
+        createdAt: nowMs,
+        lastTick: nowMs,
+        season,
+        gold: START_GOLD,
+        inventory: starter ? { [seedItem(starter.id)]: STARTER_SEEDS } : {},
+        plots: Array.from({ length: START_PLOTS }, emptyPlot),
+        npcs,
+        helpers: [],
+        region: regionId,
+        wishesDone: [],
+        unlocked: [],
+    };
+}
+
+export function serialize(state: GameState): string {
+    return JSON.stringify(state);
+}
+
+/** 读档。后续版本新增的镇民会在这里补上初始状态。 */
+export function deserialize(json: string, world: World): GameState {
+    const data = JSON.parse(json) as GameState;
+    if (!data || typeof data !== 'object' || typeof data.version !== 'number') {
+        throw new Error('存档损坏');
+    }
+    if (data.version > SAVE_VERSION) {
+        throw new Error('存档来自更新版本的游戏');
+    }
+    data.inventory ??= {};
+    data.plots ??= [];
+    data.npcs ??= {};
+    data.helpers ??= [];
+    data.wishesDone ??= [];
+    data.unlocked ??= [];
+    if (!world.regions[data.region]) {
+        throw new Error('存档里的地域不存在');
+    }
+    for (const def of Object.values(world.npcs)) {
+        data.npcs[def.id] ??= newNpcState(def);
+    }
+    data.version = SAVE_VERSION;
+    return data;
+}

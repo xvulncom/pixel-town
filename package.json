@@ -1,0 +1,14 @@
+{
+  "name": "pixel-town",
+  "private": true,
+  "description": "像素小镇：2D 像素风小镇经营养成微信小游戏",
+  "scripts": {
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.core.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
