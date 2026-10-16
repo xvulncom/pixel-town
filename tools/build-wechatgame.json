@@ -2,7 +2,7 @@
   "platform": "wechatgame",
   "buildPath": "project://build",
   "outputName": "wechatgame",
-  "debug": true,
+  "debug": false,
   "md5Cache": false,
   "sourceMaps": false,
   "startScene": "f9cefdf9-00be-4e53-8157-4489835b225f",
@@ -11,7 +11,8 @@
   ],
   "packages": {
     "wechatgame": {
-      "orientation": "portrait"
+      "orientation": "portrait",
+      "appid": "wx8045e8ca2b039599"
     }
   }
 }
