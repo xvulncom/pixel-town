@@ -12,6 +12,8 @@ import { bj, rainy, sunny } from './util';
 const T0 = bj(2026, 10, 16, 8);
 
 function plantAll(s: ReturnType<typeof newGame>, cropId: string): void {
+    // 打工容量按 6 块地设计，测试只用前 6 块
+    s.plots.length = 6;
     s.inventory[`seed:${cropId}`] = s.plots.length;
     s.plots.forEach((_, i) => assert.equal(plant(s, WORLD, i, cropId, T0).ok, true));
 }

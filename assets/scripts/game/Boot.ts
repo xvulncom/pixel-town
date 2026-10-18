@@ -161,7 +161,7 @@ function buildMain(scene: Scene): void {
 
     const vv = village.addComponent(VillageView);
     vv.world = WORLD;
-    vv.village = state.village;
+    vv.state = state;
     const mv = village.addComponent(MapView);
     mv.insetTop = HUD_H;
     mv.insetBottom = PANEL_H;

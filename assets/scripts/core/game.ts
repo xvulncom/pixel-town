@@ -3,16 +3,15 @@
 import { World } from './defs';
 import { GameState } from './types';
 import { seasonAt } from './calendar';
-import { emptyPlot } from './farm';
+import { syncFieldPlots } from './fields';
 import { inSeason } from './region';
 import { seedItem } from './inventory';
 import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
 /** 第 2 版：加自己的地盘 village。 */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const START_GOLD = 300;
-export const START_PLOTS = 6;
 export const STARTER_SEEDS = 5;
 
 /** 开局。regionId 是玩家选的老家。 */
@@ -34,7 +33,7 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         npcs[def.id] = newNpcState(def);
     }
 
-    return {
+    const state: GameState = {
         version: SAVE_VERSION,
         seed,
         createdAt: nowMs,
@@ -42,7 +41,7 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         season,
         gold: START_GOLD,
         inventory: starter ? { [seedItem(starter.id)]: STARTER_SEEDS } : {},
-        plots: Array.from({ length: START_PLOTS }, emptyPlot),
+        plots: [],
         npcs,
         helpers: [],
         region: regionId,
@@ -50,6 +49,9 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         unlocked: [],
         village: newVillage(world),
     };
+    // 开局布局里的每格菜地各配一块地
+    syncFieldPlots(state, world);
+    return state;
 }
 
 export function serialize(state: GameState): string {
@@ -79,6 +81,8 @@ export function deserialize(json: string, world: World): GameState {
     for (const def of Object.values(world.npcs)) {
         data.npcs[def.id] ??= newNpcState(def);
     }
+    // 第 2 版的地块没绑菜地，这里按菜地重新分配（老地块上的庄稼保留）
+    syncFieldPlots(data, world);
     data.version = SAVE_VERSION;
     return data;
 }

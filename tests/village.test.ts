@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WORLD } from '../assets/scripts/data/world';
-import { deserialize, newGame, serialize } from '../assets/scripts/core/game';
+import { SAVE_VERSION, deserialize, newGame, serialize } from '../assets/scripts/core/game';
 import {
     anchorFromCell, canPlace, E, N, newVillage, occupancy, place, removeAt, S, terrainGrid, terrainMask, W,
 } from '../assets/scripts/core/village';
@@ -81,7 +81,7 @@ test('存档：第 1 版存档读进来送开局地盘；删掉的建筑和越�
     delete v1.village;
     v1.version = 1;
     const loaded = deserialize(JSON.stringify(v1), WORLD);
-    assert.equal(loaded.version, 2);
+    assert.equal(loaded.version, SAVE_VERSION);
     assert.equal(loaded.village.items.length, WORLD.villageStarter.length);
 
     const bad = JSON.parse(serialize(s));

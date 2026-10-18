@@ -13,7 +13,10 @@ const T0 = bj(2026, 10, 16, 8);
 test('开局：金币、地块、当季种子、镇民初始好感', () => {
     const s = newGame(WORLD, T0, 'player-1', 'jiangnan');
     assert.equal(s.gold, 300);
-    assert.equal(s.plots.length, 6);
+    // 开局布局里有几格菜地就有几块地
+    const fields = WORLD.villageStarter.filter((it) => it.def === 'field').length;
+    assert.equal(s.plots.length, fields);
+    assert.ok(s.plots.every((p) => p.field !== undefined));
     assert.equal(s.season, 'autumn');
     assert.equal(countOf(s, 'seed:radish'), 5);
     assert.equal(s.npcs.gui.affinity, 150);

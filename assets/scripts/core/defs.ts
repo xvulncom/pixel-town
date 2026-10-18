@@ -131,6 +131,20 @@ export interface BuildingDef {
 }
 
 /** 开局送的布局，不花钱。 */
+/** 自己地盘外面一圈装饰（只画不存档、不能摆东西）。sprite 名对应 buildings.png 里的图，数字是权重。 */
+export interface BorderDef {
+    /** 外圈宽几格 */
+    margin: number;
+    /** 树：每 spacing 格放一棵，位置抖动，density 是放的概率 */
+    trees: { sprites: [string, number][]; spacing: number; density: number };
+    /** 贴着地盘的那一圈：杂草、灌木、石头 */
+    edge: { sprites: [string, number][]; density: number };
+    /** 树之间的空地上零散的杂草 */
+    scatter: { sprites: [string, number][]; density: number };
+    /** 树图的高（格）：地盘下方的树要离开这么远，免得挡住地盘里的东西 */
+    treeHeight: number;
+}
+
 export interface StarterItem {
     def: string;
     x: number;
@@ -146,4 +160,5 @@ export interface World {
     buildings: Record<string, BuildingDef>;
     tiers: Record<Tier, TierDef>;
     villageStarter: StarterItem[];
+    villageBorder: BorderDef;
 }

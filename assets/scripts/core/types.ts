@@ -17,6 +17,8 @@ export interface Plot {
     wetUntil: number;
     /** 已收获次数，多次收获作物用来判断走 regrowHours。 */
     harvests: number;
+    /** 对应自己地盘上哪格菜地（Placement.uid），存档第 3 版加入。 */
+    field?: number;
 }
 
 export interface NpcState {

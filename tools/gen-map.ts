@@ -12,12 +12,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mulberry32 } from '../assets/scripts/core/rng';
-import { Canvas, COLS, EMPTY, TILE, warmGrade } from './art/canvas';
+import { Canvas, COLS, EMPTY, Pen, TILE, warmGrade } from './art/canvas';
 import { DIRS, drawPeople, FRAME_H, FRAME_W, FRAMES, handAnchors, PEOPLE } from './art/people';
 import { G, sheet } from './art/tileset';
 import { MapData } from './maps/builder';
 import { buildJiangnan } from './maps/jiangnan';
 import { packObjects } from './art/objects';
+import { borderDecor } from '../assets/scripts/core/border';
 import { WORLD } from '../assets/scripts/data/world';
 import { grassVariant, newVillage, terrainGrid, terrainMask, villageSize } from '../assets/scripts/core/village';
 
@@ -116,36 +117,55 @@ writeFileSync(join(out, 'terrain.json'), JSON.stringify(terrainTiles) + '\n');
 console.log(`${sheet.tiles.length} tiles, ${Object.keys(objects.frames).length} buildings, ${PEOPLE.length} people, written to ${out}`);
 
 /** 开局村庄的样子：和游戏里 VillageView 同样的画法（地面按掩码挑图块，建筑按占地底边从上往下画）。 */
+/** 外圈草地的亮度，游戏里 VillageView 用同一个数。 */
+const BORDER_SHADE = 0.86;
+
 function renderVillage(scale: number): Canvas {
     const v = newVillage(WORLD);
     const [w, h] = villageSize(WORLD, v);
-    const c = new Canvas(w * TILE * scale, h * TILE * scale);
+    const m = WORLD.villageBorder.margin;
+    const c = new Canvas((w + 2 * m) * TILE * scale, (h + 2 * m) * TILE * scale);
     const blit = (src: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number) => {
         for (let y = 0; y < sh; y++) {
             for (let x = 0; x < sw; x++) {
                 const i = ((sy + y) * src.w + sx + x) * 4;
                 for (let ky = 0; ky < scale; ky++) {
                     for (let kx = 0; kx < scale; kx++) {
-                        c.blend((dx + x) * scale + kx, (dy + y) * scale + ky, src.px[i], src.px[i + 1], src.px[i + 2], src.px[i + 3]);
+                        c.blend((dx + m * TILE + x) * scale + kx, (dy + m * TILE + y) * scale + ky, src.px[i], src.px[i + 1], src.px[i + 2], src.px[i + 3]);
                     }
                 }
             }
         }
     };
     const grid = terrainGrid(WORLD, v);
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const t = grid[y * w + x];
+    for (let y = -m; y < h + m; y++) {
+        for (let x = -m; x < w + m; x++) {
+            const inside = x >= 0 && y >= 0 && x < w && y < h;
+            const t = inside ? grid[y * w + x] : null;
             const id = t ? terrainTiles[t][terrainMask(grid, w, h, x, y)] : terrainTiles.grass[grassVariant(x, y)];
             blit(tileset, (id % COLS) * TILE, Math.floor(id / COLS) * TILE, TILE, TILE, x * TILE, y * TILE);
         }
     }
-    const items = v.items.map((it) => ({ it, def: WORLD.buildings[it.def] })).filter((e) => e.def.kind === 'building');
-    items.sort((a, b) => (a.it.y + a.def.foot[1]) - (b.it.y + b.def.foot[1]));
-    for (const { it, def } of items) {
-        const [fx, fy, fw, fh] = objects.frames[def.sprite!];
-        const left = (it.x + def.foot[0] / 2) * TILE - fw / 2;
-        const bottom = (it.y + def.foot[1]) * TILE;
+    // 外圈草地压暗一点，和能盖房子的地方分开
+    const shadePen = new Pen(c, mulberry32(1));
+    const S = TILE * scale;
+    shadePen.D(0, 0, c.w, m * S, BORDER_SHADE);
+    shadePen.D(0, (h + m) * S, c.w, m * S, BORDER_SHADE);
+    shadePen.D(0, m * S, m * S, h * S, BORDER_SHADE);
+    shadePen.D((w + m) * S, m * S, m * S, h * S, BORDER_SHADE);
+    const items = v.items.map((it) => ({ it, def: WORLD.buildings[it.def] }))
+        .filter((e) => e.def.kind === 'building' || e.def.terrain === 'soil')
+        .map(({ it, def }) => ({ it, foot: def.foot, sprite: def.sprite }));
+    // 预览图里菜地轮流种上各阶段、各种作物，看作物图
+    const cropSprites = Object.keys(objects.frames).filter((n) => n.startsWith('crop_'));
+    let k = 0;
+    for (const e of items) if (!e.sprite) e.sprite = cropSprites[k++ % cropSprites.length];
+    for (const d of borderDecor(WORLD.villageBorder, w, h)) items.push({ it: { uid: 0, def: '', x: d.x, y: d.y }, foot: [1, 1], sprite: d.sprite });
+    items.sort((a, b) => (a.it.y + a.foot[1]) - (b.it.y + b.foot[1]));
+    for (const { it, foot, sprite } of items) {
+        const [fx, fy, fw, fh] = objects.frames[sprite!];
+        const left = (it.x + foot[0] / 2) * TILE - fw / 2;
+        const bottom = (it.y + foot[1]) * TILE;
         blit(objects.canvas, fx, fy, fw, fh, left, bottom - fh);
     }
     return c;

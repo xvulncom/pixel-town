@@ -1,9 +1,12 @@
 // 建造栏：底部一排建筑卡片，选中后在地图上点格子摆放；路和菜地点一下铺一格，房子先出虚影再点「放这里」。
-// 「拆除」模式下点哪拆哪，退一半钱。每次改动都存档。
+// 「拆除」模式下点哪拆哪，退一半钱。没选东西时点菜地种菜、浇水、收获卖钱。每次改动都存档。
+// 作物生长按真实时间走：开局先结算离线这段，之后每半分钟推进一次。
 
 import { _decorator, Color, Component, EventTouch, Graphics, Label, Node, Size, Sprite, UITransform, Vec2, view } from 'cc';
 import { BuildingDef, World } from '../core/defs';
 import { GameState } from '../core/types';
+import { plotIndexAt, seedChoices, tend } from '../core/fields';
+import { simulate } from '../core/simulate';
 import { anchorFromCell, canPlace, place, removeAt, tierUnlocked } from '../core/village';
 import { saveGame, SaveStore } from './Store';
 import { VillageView } from './VillageView';
@@ -18,6 +21,9 @@ const CARD_H = 170;
 const PER_PAGE = 4;
 /** 手指移动不超过这么多算点了一下，超过算拖地图。 */
 const TAP_SLOP = 12;
+/** 在线时推进作物生长的间隔（秒）。 */
+const TICK_S = 30;
+const IDLE_HINT = '点菜地种菜，熟了点一下就卖钱';
 
 type Mode = { kind: 'idle' } | { kind: 'place'; def: BuildingDef; x: number; y: number } | { kind: 'remove' };
 
@@ -39,6 +45,9 @@ export class VillageBuild extends Component {
     private removeBtn: Button | null = null;
     private okBtn: Button | null = null;
     private cancelBtn: Button | null = null;
+    private seedBtn: Button | null = null;
+    /** 点空菜地时种什么，作物 id。 */
+    private seed = '';
     private touchStart: Vec2 | null = null;
 
     start(): void {
@@ -72,6 +81,8 @@ export class VillageBuild extends Component {
         this.okBtn.node.setPosition(0, by, 0);
         this.cancelBtn = button(panel, '取消', 180, 64, () => this.setMode({ kind: 'idle' }), 'Cancel');
         this.cancelBtn.node.setPosition(230, by, 0);
+        this.seedBtn = button(panel, '', 260, 64, () => this.nextSeed(), 'Seed');
+        this.seedBtn.node.setPosition(60, by, 0);
 
         // 已解锁的排前面，同档按数据里的顺序
         const all = Object.values(this.world.buildings);
@@ -88,6 +99,33 @@ export class VillageBuild extends Component {
 
         this.renderCards();
         this.setMode({ kind: 'idle' });
+        this.nextSeed(0);
+        this.tick(true);
+        this.schedule(() => this.tick(false), TICK_S);
+    }
+
+    /** 推进作物生长；开局那次把离线期间熟了多少告诉玩家。 */
+    private tick(first: boolean): void {
+        const r = simulate(this.state, this.world, Date.now());
+        if (first && r.matured > 0) this.say(`离开这段时间熟了 ${r.matured} 块地，点一下就能卖`);
+        if (first && r.withered > 0) this.say(`换季了，${r.withered} 块地的苗枯了，点一下清掉`);
+        saveGame(this.store, this.state);
+        this.view.refresh();
+    }
+
+    /** 换下一种种子（d=0 只校正当前选择，比如换季后原来的种不了了）。 */
+    private nextSeed(d = 1): void {
+        const list = seedChoices(this.state, this.world, Date.now());
+        if (list.length === 0) {
+            this.seed = '';
+            if (this.seedBtn) this.seedBtn.label.string = '这季没种子';
+            return;
+        }
+        const i = list.indexOf(this.seed);
+        this.seed = list[i < 0 ? 0 : (i + d) % list.length];
+        const c = this.world.crops[this.seed];
+        if (this.seedBtn) this.seedBtn.label.string = `种：${c.name} ${c.seedPrice}金`;
+        if (d && this.mode.kind === 'idle') this.say(`${c.name}：约 ${c.growHours} 小时熟，卖 ${c.sellPrice} 金`);
     }
 
     onDestroy(): void {
@@ -169,6 +207,7 @@ export class VillageBuild extends Component {
         const placing = m.kind === 'place' && m.def.kind === 'building';
         if (this.okBtn) this.okBtn.node.active = placing;
         if (this.cancelBtn) this.cancelBtn.node.active = m.kind !== 'idle';
+        if (this.seedBtn) this.seedBtn.node.active = m.kind === 'idle';
         if (m.kind === 'place') {
             const ok = canPlace(this.world, this.state, m.def.id, m.x, m.y);
             this.okBtn?.setEnabled(ok.ok);
@@ -177,7 +216,7 @@ export class VillageBuild extends Component {
             if (!ok.ok && m.def.kind === 'building') this.say(ok.reason);
         } else {
             this.view.showGhost(null);
-            if (m.kind === 'idle') this.say('选一样东西，点地面摆放');
+            if (m.kind === 'idle') this.say(IDLE_HINT);
         }
         this.renderCards();
         this.refreshGold();
@@ -194,7 +233,9 @@ export class VillageBuild extends Component {
         const cell = this.view.cellAt(e.getUILocation());
         if (!cell) return;
         const m = this.mode;
-        if (m.kind === 'remove') {
+        if (m.kind === 'idle') {
+            this.tendAt(cell[0], cell[1]);
+        } else if (m.kind === 'remove') {
             const r = removeAt(this.world, this.state, cell[0], cell[1]);
             if (!r.ok) {
                 this.say(r.reason);
@@ -214,6 +255,26 @@ export class VillageBuild extends Component {
                 if (canPlace(this.world, this.state, m.def.id, x, y).ok) this.say('位置可以，点「放这里」');
             }
         }
+    }
+
+    private tendAt(x: number, y: number): void {
+        const i = plotIndexAt(this.state, this.world, x, y);
+        if (i < 0) {
+            this.say(IDLE_HINT);
+            return;
+        }
+        // 先把生长推进到此刻，免得刚熟的点了说没熟
+        simulate(this.state, this.world, Date.now());
+        const r = tend(this.state, this.world, i, this.seed, Date.now());
+        if (!r.ok) {
+            this.say(r.reason);
+            return;
+        }
+        this.say(r.message);
+        if (r.action === 'wait') return;
+        this.changed();
+        if (r.gold > 0) this.view.floatText(x, y, `+${r.gold}`);
+        else if (r.gold < 0) this.view.floatText(x, y, `${r.gold}`, new Color(240, 140, 120, 255));
     }
 
     private confirm(): void {

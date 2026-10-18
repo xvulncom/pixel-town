@@ -7,6 +7,7 @@ import { NPCS } from './npcs';
 import { WISHES } from './wishes';
 import { DIALOGUES } from './dialogues';
 import { BUILDINGS, TIERS, VILLAGE_STARTER } from './buildings';
+import { VILLAGE_BORDER } from './villageBorder';
 
 export const WORLD: World = {
     crops: CROPS,
@@ -17,4 +18,5 @@ export const WORLD: World = {
     buildings: BUILDINGS,
     tiers: TIERS,
     villageStarter: VILLAGE_STARTER,
+    villageBorder: VILLAGE_BORDER,
 };

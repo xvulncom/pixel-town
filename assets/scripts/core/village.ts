@@ -2,6 +2,7 @@
 
 import { BuildingDef, Terrain, Tier, TIER_ORDER, World } from './defs';
 import { fail, Failure, GameState, Placement, VillageState } from './types';
+import { syncFieldPlots } from './fields';
 
 /** 拆除退还的比例。 */
 export const REFUND_RATE = 0.5;
@@ -91,6 +92,7 @@ export function place(world: World, state: GameState, defId: string, x: number, 
     state.gold -= world.buildings[defId].price;
     const item = { uid: state.village.nextUid++, def: defId, x, y };
     state.village.items.push(item);
+    syncFieldPlots(state, world);
     return { ok: true, item };
 }
 
@@ -106,6 +108,7 @@ export function removeAt(world: World, state: GameState, x: number, y: number): 
     const def = world.buildings[item.def];
     const refund = def ? Math.floor(def.price * REFUND_RATE) : 0;
     state.gold += refund;
+    syncFieldPlots(state, world);
     return { ok: true, item, refund };
 }
 

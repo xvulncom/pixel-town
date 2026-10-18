@@ -4,10 +4,12 @@
 import { mulberry32 } from '../../assets/scripts/core/rng';
 import { Canvas, Pen, TILE } from './canvas';
 import {
-    bamboo, fence, house, lanternPost, laundry, pineTree, pottedPlant, roundTree, stall, stoneBench, waterJar, well,
-    willow, woodpile,
+    bamboo, bush, fence, house, lanternPost, laundry, pineTree, pottedPlant, roundTree, stall, stoneBench, waterJar, well,
+    rocks, willow, woodpile,
 } from './props';
+import { flowerPatch, tallGrass } from './terrain';
 import { archway, stage, teaTable } from './town';
+import { LOOKS, cropRipeArt, cropStageArt } from './crops';
 
 interface ObjectArt {
     /** 图的大小（格） */
@@ -44,6 +46,18 @@ export const OBJECTS: Record<string, ObjectArt> = {
     pine: { w: 3, h: 5, paint: pineTree },
     bamboo: { w: 3, h: 5, paint: bamboo },
     willow: { w: 3, h: 5, paint: willow },
+    // 地盘外圈的杂草、灌木（见 data/villageBorder.ts）；三种杂草画法一样，随机数不同长得不一样
+    weeds_1: { w: 1, h: 1, paint: tallGrass },
+    weeds_2: { w: 1, h: 1, paint: tallGrass },
+    weeds_3: { w: 1, h: 1, paint: tallGrass },
+    shrub: { w: 1, h: 1, paint: bush },
+    wildflowers: { w: 1, h: 1, paint: (p) => flowerPatch(p, [0xf7f2e8, 0xe98fa6, 0xb7a0e0]) },
+    rocks: { w: 1, h: 1, paint: rocks },
+    // 菜地上的作物（见 crops.ts），名字和 core/fields.ts 的 cropSprite 对应
+    crop_sprout: { w: 1, h: 2, paint: (p) => cropStageArt(p, 'sprout') },
+    crop_young: { w: 1, h: 2, paint: (p) => cropStageArt(p, 'young') },
+    crop_withered: { w: 1, h: 2, paint: (p) => cropStageArt(p, 'withered') },
+    ...Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [`crop_${id}`, { w: 1, h: 2, paint: (p: Pen) => cropRipeArt(p, look) }])),
 };
 
 /** 按高度排成几行拼进一张图，返回图和每张的 [x, y, w, h]（像素）。 */
