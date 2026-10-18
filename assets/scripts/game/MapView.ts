@@ -4,7 +4,7 @@ import { _decorator, Component, EventMouse, EventTouch, Input, input, UITransfor
 
 const { ccclass } = _decorator;
 
-const MIN_SCALE = 2;
+const MIN_SCALE = 1;
 const MAX_SCALE = 6;
 const DEFAULT_SCALE = 3;
 

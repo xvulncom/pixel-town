@@ -3,7 +3,8 @@
 // 输出：assets/resources/maps/town-tiles.png、assets/resources/maps/jiangnan.tmx
 //
 // 地形（土路、水面、耕地、石板）按上下左右四邻是否同类自动选边缘图块，每种 16 块；
-// 房子、树、桥、船是多格大图，画完切成 16px 小块放进图块集。
+// 房子、树、桥、船、小人是多格大图，画完切成 16px 小块放进图块集。物体尺寸照星露谷。
+// 图层：ground 地面，deco 物体底部（挡路），over 物体上半部分（盖在人物头上）。
 
 import { deflateSync, crc32 } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -308,103 +309,127 @@ function stonePaint() {
     };
 }
 
-// ---------- 大图 ----------
+// ---------- 大图（尺寸照星露谷：小人 1×2 格，树 3×5，民居 6×5） ----------
 
-function house(p: Pen, sign: 'none' | 'shop' | 'workshop'): void {
-    p.R(4, 45, 43, 3, C.shadow, 64);
-    const wx = 3;
-    const wy = 22;
-    const ww = 42;
-    const wh = 23;
-    p.R(wx, wy, ww, wh, C.wall);
-    p.R(wx + ww - 3, wy, 3, wh, C.wallShade);
-    p.R(wx, wy, ww, 1, C.wallShade);
-    p.R(wx, wy + wh - 3, ww, 3, C.plinth);
-    for (let i = 2; i < ww - 3; i += 8) p.R(wx + i, wy + wh - 3, 1, 3, C.plinthJoint);
+function lanternAt(p: Pen, x: number, y: number): void {
+    p.R(x, y - 3, 1, 3, 0x3b2a1e);
+    p.E(x, y + 4, 3, 4, (dx) => (dx < -1 ? C.red : dx > 1 ? 0xa82724 : C.redLight));
+    p.R(x - 2, y, 5, 1, C.gold);
+    p.R(x - 2, y + 8, 5, 1, C.gold);
+    p.R(x, y + 9, 1, 3, C.gold);
+}
 
-    const ry = 8;
-    for (let j = 0; j < 13; j++) {
-        const ex = Math.max(0, 3 - j);
-        p.R(1 + ex, ry + j, 46 - 2 * ex, 1, j % 3 === 0 ? C.roof[0] : C.roof[1]);
+/** 江南民居：w×h 格，白墙黛瓦，飞檐翘角。 */
+function house(p: Pen, w: number, h: number, sign: 'none' | 'shop' | 'workshop'): void {
+    const pw = w * TILE;
+    const ph = h * TILE;
+    const wy = Math.round(ph * 0.48);
+    const base = ph - 3;
+    p.R(4, base, pw - 4, 3, C.shadow, 64);
+
+    p.R(2, wy, pw - 4, base - wy, C.wall);
+    p.R(pw - 5, wy, 3, base - wy, C.wallShade);
+    p.R(2, wy, pw - 4, 2, 0xc9c4b5);
+    p.R(2, base - 4, pw - 4, 4, C.plinth);
+    for (let i = 6; i < pw - 6; i += 10) p.R(i, base - 4, 1, 4, C.plinthJoint);
+
+    const ry = 7;
+    for (let j = 0; ry + j < wy; j++) {
+        const ex = Math.max(0, 4 - j);
+        p.R(1 + ex, ry + j, pw - 2 - 2 * ex, 1, j % 3 === 0 ? C.roof[0] : C.roof[1]);
     }
-    for (let i = 2; i < 46; i += 3) p.R(i, ry + 1, 1, 10, C.roofRib);
-    p.R(0, ry + 11, 48, 2, C.roofEdge);
-    p.P(0, ry + 10, C.roofEdge);
-    p.P(47, ry + 10, C.roofEdge);
-    p.R(2, ry - 1, 44, 2, C.roofEdge);
-    p.P(1, ry - 2, C.roofEdge);
-    p.P(46, ry - 2, C.roofEdge);
+    for (let i = 3; i < pw - 3; i += 3) p.R(i, ry + 1, 1, wy - ry - 3, C.roofRib);
+    p.R(0, wy - 2, pw, 2, C.roofEdge);
+    for (const [x, d] of [[0, 1], [pw - 1, -1]]) {
+        p.P(x, wy - 3, C.roofEdge);
+        p.P(x, wy - 4, C.roofEdge);
+        p.P(x + d, wy - 3, C.roofEdge);
+    }
+    p.R(3, ry - 2, pw - 6, 3, C.roofEdge);
+    p.R(4, ry - 2, pw - 8, 1, 0x3a3f47);
+    for (const x of [1, pw - 3]) p.R(x, ry - 4, 2, 2, C.roofEdge);
 
-    const dx = 20;
-    const dy = wy + wh - 13;
-    p.R(dx, dy, 8, 13, C.wood);
-    p.R(dx + 1, dy + 1, 3, 12, C.woodLight);
-    p.R(dx + 4, dy + 1, 3, 12, C.woodLight);
-    p.P(dx + 3, dy + 6, C.gold);
-    p.P(dx + 4, dy + 6, C.gold);
+    const dw = 12;
+    const dh = 20;
+    const dx = Math.floor(pw / 2) - dw / 2;
+    const dy = base - dh;
+    p.R(dx - 1, dy - 1, dw + 2, dh + 1, C.woodDark);
+    p.R(dx, dy, dw, dh, C.wood);
+    p.R(dx + 1, dy + 1, 4, dh - 1, C.woodLight);
+    p.R(dx + 7, dy + 1, 4, dh - 1, C.woodLight);
+    p.R(dx + 5, dy + 9, 2, 2, C.gold);
+    p.R(dx - 2, base - 1, dw + 4, 1, 0x9b968b);
 
-    for (const ox of [7, 31]) {
-        const oy = 28;
-        p.R(ox, oy, 10, 8, C.woodDark);
-        p.R(ox + 1, oy + 1, 8, 6, C.paper);
-        for (let k = 1; k < 9; k += 2) p.R(ox + k, oy + 1, 1, 6, C.lattice);
-        p.R(ox + 1, oy + 4, 8, 1, C.lattice);
+    const winY = wy + 8;
+    const slots: number[] = [];
+    for (let x = 8; x + 14 <= dx - 4; x += 20) slots.push(x);
+    for (let x = pw - 8 - 14; x >= dx + dw + 4; x -= 20) slots.push(x);
+    for (const ox of slots) {
+        p.R(ox, winY, 14, 12, C.woodDark);
+        p.R(ox + 1, winY + 1, 12, 10, C.paper);
+        for (let k = 2; k < 13; k += 3) p.R(ox + k, winY + 1, 1, 10, C.lattice);
+        p.R(ox + 1, winY + 5, 12, 1, C.lattice);
+        p.R(ox, winY + 12, 14, 1, 0xc9c4b5);
     }
 
     if (sign === 'shop') {
-        p.R(16, 23, 16, 6, 0xb5322c);
-        p.R(17, 24, 14, 4, 0xd24a3d);
-        for (let k = 0; k < 3; k++) p.R(19 + k * 4, 25, 2, 2, C.paper);
-        lanternAt(p, 2, 21);
-        lanternAt(p, 44, 21);
+        const sx = Math.floor(pw / 2) - 15;
+        p.R(sx, wy + 3, 30, 8, 0x8e2621);
+        p.R(sx + 1, wy + 4, 28, 6, 0xd24a3d);
+        for (let k = 0; k < 4; k++) p.R(sx + 4 + k * 6, wy + 6, 3, 2, C.paper);
+        lanternAt(p, 6, wy + 1);
+        lanternAt(p, pw - 7, wy + 1);
     } else if (sign === 'workshop') {
-        p.R(16, 23, 16, 6, C.woodDark);
-        p.R(17, 24, 14, 4, C.lattice);
-        for (let k = 0; k < 3; k++) p.R(19 + k * 4, 25, 2, 2, 0xe3c58a);
+        const sx = Math.floor(pw / 2) - 13;
+        p.R(sx, wy + 3, 26, 7, C.woodDark);
+        p.R(sx + 1, wy + 4, 24, 5, C.lattice);
+        for (let k = 0; k < 3; k++) p.R(sx + 5 + k * 7, wy + 6, 3, 2, 0xe3c58a);
+        for (const [lx, ly] of [[dx + dw + 6, base - 5], [dx + dw + 12, base - 5], [dx + dw + 9, base - 10]]) {
+            p.E(lx, ly, 3, 3, (ddx, ddy) => (ddx * ddx + ddy * ddy < 3 ? 0xd9b37a : 0x8a5a34));
+        }
     }
-}
-
-function lanternAt(p: Pen, x: number, y: number): void {
-    p.R(x - 2, y, 5, 6, C.red);
-    p.R(x - 1, y + 1, 3, 4, C.redLight);
-    p.R(x - 1, y - 1, 3, 1, C.gold);
-    p.R(x - 1, y + 6, 3, 1, C.gold);
-    p.P(x, y + 7, C.gold);
 }
 
 function roundTree(p: Pen): void {
-    p.E(16, 29, 11, 2, () => C.shadow);
-    for (let y = 26; y < 32; y++) for (let x = 5; x < 28; x++) {
-        const i = (y * 32 + x) * 4;
-        if (p.c.px[i + 3] === 255 && p.c.px[i] === 0) p.c.px[i + 3] = 56;
+    p.E(24, 76, 12, 3, () => C.shadow);
+    for (let y = 72; y < 80; y++) for (let x = 10; x < 38; x++) {
+        const i = (y * 48 + x) * 4;
+        if (p.c.px[i + 3] === 255 && p.c.px[i] === 0 && p.c.px[i + 1] === 0) p.c.px[i + 3] = 60;
     }
-    p.R(14, 18, 4, 11, C.trunk);
-    p.R(15, 18, 1, 11, C.trunkLight);
-    p.E(16, 12, 13, 11, (dx, dy) => {
-        const edge = (dx * dx) / 169 + (dy * dy) / 121 > 0.8;
-        if (edge) return C.leaf[3];
-        if (dx + dy > 6) return C.leaf[0];
-        if (dx + dy < -8) return C.leaf[2];
-        return p.r() < 0.1 ? C.leaf[3] : C.leaf[1];
+    p.R(21, 40, 6, 36, C.trunk);
+    p.R(22, 40, 2, 36, C.trunkLight);
+    p.R(19, 72, 10, 4, C.trunk);
+    p.R(25, 46, 1, 20, 0x4a2f1c);
+    p.E(24, 26, 22, 22, (dx, dy) => {
+        const d = (dx * dx + dy * dy) / 484;
+        if (d > 0.86) return C.leaf[3];
+        if (dx + dy > 10) return C.leaf[0];
+        if (dx + dy < -14) return C.leaf[2];
+        return p.r() < 0.12 ? C.leaf[0] : C.leaf[1];
     });
-    for (let i = 0; i < 6; i++) p.P(8 + Math.floor(p.r() * 10), 5 + Math.floor(p.r() * 6), C.leaf[2]);
+    for (let i = 0; i < 9; i++) {
+        const cx = 10 + Math.floor(p.r() * 26);
+        const cy = 10 + Math.floor(p.r() * 26);
+        p.E(cx, cy, 3, 2, (dx, dy) => (dy < 0 ? C.leaf[2] : C.leaf[1]));
+    }
 }
 
 function willow(p: Pen): void {
-    p.R(9, 29, 15, 2, C.shadow, 56);
-    p.R(15, 10, 3, 20, C.trunk);
-    p.R(16, 10, 1, 20, C.trunkLight);
-    p.E(16, 9, 13, 7, (dx, dy) => (dy > 2 ? C.willow[0] : dx + dy < -6 ? C.willow[2] : C.willow[1]));
-    for (let i = 0; i < 40; i++) {
+    p.R(14, 75, 20, 3, C.shadow, 60);
+    p.R(22, 28, 5, 48, C.trunk);
+    p.R(23, 28, 2, 48, C.trunkLight);
+    p.R(20, 72, 9, 4, C.trunk);
+    p.E(24, 22, 22, 14, (dx, dy) => (dy > 5 ? C.willow[0] : dx + dy < -10 ? C.willow[2] : C.willow[1]));
+    for (let i = 0; i < 60; i++) {
         const a = p.r() * Math.PI * 2;
-        const d = Math.sqrt(p.r()) * 0.8;
-        p.P(16 + Math.cos(a) * d * 13, 8 + Math.sin(a) * d * 6, p.r() < 0.6 ? C.willow[2] : C.willow[3]);
+        const d = Math.sqrt(p.r()) * 0.85;
+        p.P(24 + Math.cos(a) * d * 22, 20 + Math.sin(a) * d * 12, p.r() < 0.6 ? C.willow[2] : C.willow[3]);
     }
-    for (let k = -12; k <= 12; k += 2) {
-        const len = 10 + Math.floor(p.r() * 10);
+    for (let k = -21; k <= 21; k += 2) {
+        const len = 18 + Math.floor(p.r() * 26);
         for (let j = 0; j < len; j++) {
-            const sway = j > len / 2 ? Math.sign(k) : 0;
-            p.P(16 + k + sway, 10 + j, j % 3 === 0 ? C.willow[2] : C.willow[0]);
+            const sway = j > len * 0.6 ? Math.sign(k) : 0;
+            p.P(24 + k + sway, 26 + j, j % 3 === 0 ? C.willow[2] : C.willow[0]);
         }
     }
 }
@@ -422,11 +447,12 @@ function rocks(p: Pen): void {
     p.E(11, 12, 2, 2, (dx, dy) => (dy < 0 ? 0xc4c0b6 : 0x8f8b82));
 }
 
-/** 竖向过河的石桥，2×3 格。 */
-function bridge(p: Pen): void {
-    for (let y = 0; y < 48; y++) {
+/** 竖向过河的石桥：2 格宽，长度按河宽。 */
+function bridgeV(p: Pen, hT: number): void {
+    const ph = hT * TILE;
+    for (let y = 0; y < ph; y++) {
+        const mid = Math.abs(y - ph / 2) < ph * 0.25;
         for (let x = 3; x < 29; x++) {
-            const mid = Math.abs(y - 24) < 10;
             p.P(x, y, y % 5 === 4 ? 0x8f8f88 : mid ? 0xc4c4bc : p.r() < 0.7 ? 0xa9a9a2 : 0xb9b9b1);
         }
         for (const bx of [0, 29]) {
@@ -434,27 +460,49 @@ function bridge(p: Pen): void {
             p.P(bx + (bx === 0 ? 2 : 0), y, 0x6e6e68);
         }
     }
-    for (let y = 2; y < 48; y += 8) {
+    for (let y = 2; y < ph; y += 8) {
         p.R(0, y, 3, 3, 0xc4c4bc);
         p.R(29, y, 3, 3, 0xc4c4bc);
     }
 }
 
-/** 乌篷船，2×1 格。 */
+/** 横跨小河的石桥：宽按河宽，2 格高。 */
+function bridgeH(p: Pen, wT: number): void {
+    const pw = wT * TILE;
+    for (let x = 0; x < pw; x++) {
+        const mid = Math.abs(x - pw / 2) < pw * 0.25;
+        for (let y = 3; y < 29; y++) {
+            p.P(x, y, x % 5 === 4 ? 0x8f8f88 : mid ? 0xc4c4bc : p.r() < 0.7 ? 0xa9a9a2 : 0xb9b9b1);
+        }
+        for (const by of [0, 29]) {
+            p.R(x, by, 1, 3, 0x8a8a83);
+            p.P(x, by + (by === 0 ? 2 : 0), 0x6e6e68);
+        }
+    }
+    for (let x = 2; x < pw; x += 8) {
+        p.R(x, 0, 3, 3, 0xc4c4bc);
+        p.R(x, 29, 3, 3, 0xc4c4bc);
+    }
+}
+
+/** 乌篷船，4×2 格。 */
 function boat(p: Pen): void {
-    for (let x = 2; x < 30; x++) {
-        const t = Math.abs(x - 16) / 14;
-        const h = Math.round(4 - t * 3);
-        p.R(x, 10 - Math.round(t * 2), 1, h, 0x4a3628);
-        p.P(x, 10 - Math.round(t * 2), 0x6b4c36);
+    for (let x = 4; x < 60; x++) {
+        const t = Math.abs(x - 32) / 28;
+        const top = 20 - Math.round(t * 5);
+        p.R(x, top, 1, Math.round(8 - t * 5) + 1, 0x4a3628);
+        p.P(x, top, 0x6b4c36);
     }
-    for (let x = 9; x < 23; x++) {
-        const t = Math.abs(x - 16) / 7;
-        const top = 4 + Math.round(t * t * 3);
-        p.R(x, top, 1, 10 - top, x % 3 === 0 ? 0x3d3d3d : 0x2b2b2b);
+    for (let x = 18; x < 46; x++) {
+        const t = Math.abs(x - 32) / 14;
+        const top = 6 + Math.round(t * t * 7);
+        p.R(x, top, 1, 20 - top, x % 4 === 0 ? 0x3d3d3d : 0x2b2b2b);
+        p.P(x, top, 0x4a4a4a);
     }
-    p.R(4, 13, 6, 1, C.shine);
-    p.R(22, 13, 6, 1, C.shine);
+    p.R(56, 10, 1, 10, 0x8a5a34);
+    p.R(8, 28, 10, 1, C.shine);
+    p.R(44, 28, 12, 1, C.shine);
+    p.R(24, 30, 8, 1, C.shine2);
 }
 
 function lilyPad(p: Pen): void {
@@ -465,13 +513,15 @@ function lilyPad(p: Pen): void {
     p.P(11, 8, 0xf7c9dc);
 }
 
-function lantern(p: Pen): void {
-    p.R(7, 0, 1, 4, 0x3b2a1e);
-    p.E(7, 8, 4, 4, (dx) => (dx < -1 ? C.red : dx > 1 ? 0xa82724 : C.redLight));
-    p.R(5, 4, 5, 1, C.gold);
-    p.R(5, 12, 5, 1, C.gold);
-    p.R(7, 13, 1, 3, C.gold);
-    p.P(6, 6, 0xf7a08a);
+/** 挂灯笼的木杆，1×3 格。 */
+function lanternPost(p: Pen): void {
+    p.R(4, 44, 9, 3, C.shadow, 60);
+    p.R(5, 40, 7, 5, 0x9b968b);
+    p.R(5, 40, 7, 1, 0xb4b0a6);
+    p.R(7, 6, 3, 34, C.woodDark);
+    p.R(7, 6, 1, 34, C.lattice);
+    p.R(7, 6, 8, 2, C.woodDark);
+    lanternAt(p, 13, 11);
 }
 
 function fence(p: Pen): void {
@@ -484,53 +534,67 @@ function fence(p: Pen): void {
     p.R(0, 14, 16, 1, C.shadow, 50);
 }
 
+/** 作物，1×2 格：下半格是根部所在的地块。 */
 function crop(p: Pen, kind: 'sprout' | 'cabbage' | 'rice'): void {
-    for (const [ox, oy] of [[0, 0], [8, 0], [0, 8], [8, 8]]) {
-        if (kind === 'sprout') {
-            p.R(ox + 3, oy + 3, 1, 4, 0x4f8a30);
-            p.P(ox + 2, oy + 4, 0x7cc04e);
-            p.P(ox + 4, oy + 3, 0x7cc04e);
-            p.P(ox + 5, oy + 5, 0x7cc04e);
-        } else if (kind === 'cabbage') {
-            p.R(ox + 1, oy + 2, 6, 5, 0x8fcf6a);
-            p.R(ox + 2, oy + 3, 4, 3, 0xbfe8a0);
-            p.P(ox + 3, oy + 4, 0xe8f7da);
-            p.R(ox + 1, oy + 6, 6, 1, 0x5f9c3e);
-        } else {
-            for (let k = 0; k < 3; k++) {
-                p.R(ox + 1 + k * 2, oy + 1, 1, 6, 0x9c8a2e);
-                p.P(ox + 1 + k * 2, oy + 1, 0xe8c84a);
-                p.P(ox + 1 + k * 2, oy + 2, 0xe8c84a);
-            }
+    if (kind === 'sprout') {
+        for (const ox of [3, 10]) {
+            p.R(ox + 1, 22, 1, 6, 0x4f8a30);
+            p.R(ox - 1, 22, 2, 2, 0x7cc04e);
+            p.R(ox + 2, 20, 2, 2, 0x7cc04e);
+            p.P(ox + 3, 24, 0x7cc04e);
+        }
+    } else if (kind === 'cabbage') {
+        p.R(3, 29, 10, 1, C.shadow, 60);
+        p.E(8, 24, 6, 5, (dx, dy) => (dy > 2 ? 0x5f9c3e : dx * dx + dy * dy < 6 ? 0xd9f2c4 : 0x8fcf6a));
+        p.P(6, 22, 0xbfe8a0);
+        p.P(10, 23, 0xbfe8a0);
+    } else {
+        for (const sx of [2, 5, 8, 11, 13]) {
+            p.R(sx, 12, 1, 18, 0x9c8a2e);
+            for (let y = 6; y < 13; y++) p.P(sx + (y > 9 ? 1 : 0), y, y % 2 ? 0xe8c84a : 0xd4b13c);
         }
     }
 }
 
-/** 16px 小人：hair 发色，top 上衣，hat 是否戴草帽。 */
-function person(p: Pen, hair: number, top: number, hat: boolean, bun: boolean): void {
-    const x = 4;
-    const y = 2;
-    p.R(x - 1, y + 12, 9, 2, C.shadow, 64);
-    p.R(x + 1, y + 1, 5, 5, C.skin);
-    p.R(x + 1, y + 1, 5, 2, hair);
-    if (bun) p.R(x + 2, y - 1, 3, 2, hair);
-    if (hat) {
-        p.R(x, y, 7, 2, 0xd8b45a);
-        p.R(x - 1, y + 1, 9, 1, 0xc49e45);
+/** 星露谷尺寸的小人：16×32。 */
+function person(p: Pen, o: { hair: number; top: number; pants: number; hat?: boolean; bun?: boolean; apron?: boolean }): void {
+    p.E(8, 30, 5, 1, () => C.shadow);
+    for (let y = 29; y < 32; y++) for (let x = 0; x < 16; x++) {
+        const i = (y * 16 + x) * 4;
+        if (p.c.px[i + 3] === 255 && p.c.px[i] === 0 && p.c.px[i + 1] === 0) p.c.px[i + 3] = 60;
     }
-    p.P(x + 2, y + 4, C.eye);
-    p.P(x + 4, y + 4, C.eye);
-    p.R(x, y + 6, 7, 5, top);
-    p.R(x, y + 10, 7, 1, C.shadow, 70);
-    p.P(x - 1, y + 7, C.skin);
-    p.P(x + 7, y + 7, C.skin);
-    p.R(x + 1, y + 11, 2, 2, 0x4a3628);
-    p.R(x + 4, y + 11, 2, 2, 0x4a3628);
+    p.R(5, 24, 3, 5, o.pants);
+    p.R(9, 24, 3, 5, o.pants);
+    p.R(5, 28, 3, 1, 0x2b2420);
+    p.R(9, 28, 3, 1, 0x2b2420);
+    p.R(4, 15, 8, 10, o.top);
+    p.R(11, 15, 1, 10, C.shadow, 60);
+    p.R(3, 16, 1, 6, o.top);
+    p.R(12, 16, 1, 6, o.top);
+    p.P(3, 22, C.skin);
+    p.P(12, 22, C.skin);
+    if (o.apron) p.R(5, 18, 6, 7, 0x8a5a34);
+    p.R(5, 6, 6, 9, C.skin);
+    p.R(4, 5, 8, 3, o.hair);
+    p.R(4, 5, 1, 6, o.hair);
+    p.R(11, 5, 1, 6, o.hair);
+    if (o.bun) p.R(6, 2, 4, 3, o.hair);
+    p.P(6, 10, C.eye);
+    p.P(9, 10, C.eye);
+    p.P(5, 12, 0xf2a6a0);
+    p.P(10, 12, 0xf2a6a0);
+    if (o.hat) {
+        p.R(5, 1, 6, 4, 0xd8b45a);
+        p.R(2, 5, 12, 1, 0xc49e45);
+        p.R(5, 4, 6, 1, 0x8a5a34);
+    }
 }
 
 // ---------- 组装图块集 ----------
 
 const sheet = new Sheet();
+const RIVER_H = 5;
+const CANAL_W = 3;
 const G = {
     grass: [
         sheet.add((p) => grassTile(p, 'plain')),
@@ -543,42 +607,45 @@ const G = {
     soil: Array.from({ length: 16 }, (_, m) => sheet.add((p) => terrainTile(p, m, 1, 0, soilPaint(p.r)))),
     stone: Array.from({ length: 16 }, (_, m) => sheet.add((p) => terrainTile(p, m, 0, 0, stonePaint()))),
     waterFrames: [1, 2, 3].map((f) => sheet.add((p) => terrainTile(p, 15, 1, 1, waterPaint(f)))),
-    house: sheet.sprite(3, 3, (p) => house(p, 'none')),
-    shop: sheet.sprite(3, 3, (p) => house(p, 'shop')),
-    workshop: sheet.sprite(3, 3, (p) => house(p, 'workshop')),
-    tree: sheet.sprite(2, 2, roundTree),
-    willow: sheet.sprite(2, 2, willow),
-    bridge: sheet.sprite(2, 3, bridge),
-    boat: sheet.sprite(2, 1, boat),
+    house: sheet.sprite(6, 5, (p) => house(p, 6, 5, 'none')),
+    shop: sheet.sprite(7, 6, (p) => house(p, 7, 6, 'shop')),
+    workshop: sheet.sprite(6, 5, (p) => house(p, 6, 5, 'workshop')),
+    tree: sheet.sprite(3, 5, roundTree),
+    willow: sheet.sprite(3, 5, willow),
+    bridgeV: sheet.sprite(2, RIVER_H, (p) => bridgeV(p, RIVER_H)),
+    bridgeH: sheet.sprite(CANAL_W, 2, (p) => bridgeH(p, CANAL_W)),
+    boat: sheet.sprite(4, 2, boat),
+    lanternPost: sheet.sprite(1, 3, lanternPost),
+    sprout: sheet.sprite(1, 2, (p) => crop(p, 'sprout')),
+    cabbage: sheet.sprite(1, 2, (p) => crop(p, 'cabbage')),
+    rice: sheet.sprite(1, 2, (p) => crop(p, 'rice')),
+    gui: sheet.sprite(1, 2, (p) => person(p, { hair: 0x8b8b8b, top: 0xa5463e, pants: 0x3a3a48, bun: true })),
+    zhou: sheet.sprite(1, 2, (p) => person(p, { hair: 0x3a2a20, top: 0x3d6f8f, pants: 0x4a3628, apron: true })),
+    hero: sheet.sprite(1, 2, (p) => person(p, { hair: 0x2b2420, top: 0x3d6fb0, pants: 0x4a3628, hat: true })),
     bush: sheet.add(bush),
     rocks: sheet.add(rocks),
     lily: sheet.add(lilyPad),
-    lantern: sheet.add(lantern),
     fence: sheet.add(fence),
-    sprout: sheet.add((p) => crop(p, 'sprout')),
-    cabbage: sheet.add((p) => crop(p, 'cabbage')),
-    rice: sheet.add((p) => crop(p, 'rice')),
-    gui: sheet.add((p) => person(p, 0x8b8b8b, 0xa5463e, false, true)),
-    zhou: sheet.add((p) => person(p, 0x3a2a20, 0x3d6f8f, false, false)),
-    hero: sheet.add((p) => person(p, 0x2b2420, 0x3d6fb0, true, false)),
 };
 
 // ---------- 地图 ----------
 
-const W = 48;
-const H = 32;
+const W = 96;
+const H = 72;
 
 enum Terr { Grass, Dirt, Water, Soil, Stone }
 
 interface MapData {
     ground: number[];
     deco: number[];
+    over: number[];
 }
 
 function buildJiangnan(): MapData {
     const rnd = mulberry32(20261016);
     const terr = new Array<Terr>(W * H).fill(Terr.Grass);
     const deco = new Array<number>(W * H).fill(EMPTY);
+    const over = new Array<number>(W * H).fill(EMPTY);
     const bridgeCell = new Set<number>();
     const at = (x: number, y: number) => y * W + x;
     const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H;
@@ -587,73 +654,110 @@ function buildJiangnan(): MapData {
     };
     const setT = (t: Terr) => (x: number, y: number) => { terr[at(x, y)] = t; };
 
-    // 河横穿小镇，两条横路、两条竖路，竖路过河处架石桥
-    rect(0, 15, W, 3, setT(Terr.Water));
-    rect(4, 10, 41, 2, setT(Terr.Dirt));
-    rect(4, 21, 41, 2, setT(Terr.Dirt));
-    for (const x of [12, 33]) {
-        rect(x, 3, 2, 26, (xx, y) => {
-            if (y >= 15 && y <= 17) bridgeCell.add(at(xx, y));
-            else terr[at(xx, y)] = Terr.Dirt;
-        });
+    // 水：一条大河横穿，一条小河往南分出去，两岸是水巷人家
+    const riverY = 34;
+    const canalX = 60;
+    rect(0, riverY, W, RIVER_H, setT(Terr.Water));
+    rect(canalX, riverY + RIVER_H, CANAL_W, 28, setT(Terr.Water));
+    // 路：两横两竖，竖路过大河、横路过小河的地方架桥
+    const roadsY = [28, 44];
+    const roadsX = [30, 76];
+    for (const y of roadsY) rect(4, y, W - 8, 2, setT(Terr.Dirt));
+    for (const x of roadsX) rect(x, 6, 2, H - 10, setT(Terr.Dirt));
+    for (let i = 0; i < W * H; i++) {
+        const x = i % W;
+        const y = Math.floor(i / W);
+        const onRoad = roadsY.some((ry) => y >= ry && y < ry + 2) || roadsX.some((rx) => x >= rx && x < rx + 2 && y >= 6 && y < H - 4);
+        const onWater = (y >= riverY && y < riverY + RIVER_H) || (x >= canalX && x < canalX + CANAL_W && y >= riverY + RIVER_H && y < riverY + RIVER_H + 28);
+        if (onRoad && onWater) {
+            bridgeCell.add(i);
+            terr[i] = Terr.Water;
+        }
     }
-    // 镇中心石板广场
-    rect(18, 2, 12, 7, setT(Terr.Stone));
-    // 农田六块，每块 3×2
-    const plots = [[16, 25], [20, 25], [24, 25], [16, 28], [20, 28], [24, 28]];
-    for (const [px, py] of plots) rect(px, py, 3, 2, setT(Terr.Soil));
+    // 镇中心石板广场，一条小路连到北边横路
+    rect(36, 6, 20, 13, setT(Terr.Stone));
+    rect(44, 19, 2, 9, setT(Terr.Dirt));
+    // 农田：西南角 12 块，每块 4×3
+    const plots: [number, number][] = [];
+    for (const py of [51, 56, 61]) for (const px of [8, 13, 18, 23]) plots.push([px, py]);
+    for (const [px, py] of plots) rect(px, py, 4, 3, setT(Terr.Soil));
 
-    const free = (x: number, y: number) => inMap(x, y) && deco[at(x, y)] === EMPTY && terr[at(x, y)] === Terr.Grass;
-    const place = (x: number, y: number, grid: number[][]) => {
+    const grassAt = (x: number, y: number) => inMap(x, y) && terr[at(x, y)] === Terr.Grass && !bridgeCell.has(at(x, y));
+    /** 放大图：最下一行进 deco（挡路的部分），上面几行进 over（盖在人头上）。flat 时全部进 deco。 */
+    const place = (x: number, y: number, grid: number[][], flat = false) => {
+        const last = grid.length - 1;
         grid.forEach((row, dy) => row.forEach((t, dx) => {
-            if (t !== EMPTY && inMap(x + dx, y + dy)) deco[at(x + dx, y + dy)] = t;
+            if (t === EMPTY || !inMap(x + dx, y + dy)) return;
+            if (flat || dy === last) deco[at(x + dx, y + dy)] = t;
+            else over[at(x + dx, y + dy)] = t;
         }));
     };
-    const area = (x: number, y: number, w: number, h: number) => {
-        for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (!free(xx, yy)) return false;
+    /** 能不能放：底行要在空草地上，上面几行不能压到别的东西。 */
+    const fits = (x: number, y: number, grid: number[][], solid = false) => {
+        const last = grid.length - 1;
+        for (let dy = 0; dy <= last; dy++) {
+            for (let dx = 0; dx < grid[dy].length; dx++) {
+                const xx = x + dx;
+                const yy = y + dy;
+                if (!inMap(xx, yy)) return false;
+                const i = at(xx, yy);
+                if (deco[i] !== EMPTY || over[i] !== EMPTY) return false;
+                if ((solid || dy === last) && !grassAt(xx, yy)) return false;
+            }
+        }
         return true;
     };
 
-    // 民居（3×3），门朝下方的路
-    for (const x of [2, 6, 15, 37, 41]) place(x, 6, G.house);
-    place(28, 6, G.house);
-    place(22, 12, G.shop);
-    place(38, 18, G.workshop);
-    for (const x of [12, 33]) place(x, 15, G.bridge);
+    // 房子：北岸一排民居，广场东边是桂姨的杂货铺；南岸老周的木工坊，小河两岸水巷人家
+    for (const x of [6, 14, 22, 36, 58, 66, 82]) place(x, 22, G.house);
+    place(48, 21, G.shop);
+    place(38, 39, G.workshop);
+    for (const y of [48, 56]) {
+        place(canalX - 7, y, G.house);
+        place(canalX + CANAL_W + 1, y, G.house);
+    }
+    place(82, 48, G.house);
+    place(82, 58, G.house);
+    for (const x of roadsX) place(x, riverY, G.bridgeV, true);
+    place(canalX, roadsY[1], G.bridgeH, true);
 
-    for (const x of [18, 21, 26, 29]) deco[at(x, 2)] = G.lantern;
-    rect(15, 24, 13, 1, (x, y) => { deco[at(x, y)] = G.fence; });
-    rect(15, 30, 13, 1, (x, y) => { deco[at(x, y)] = G.fence; });
-    const crops = [G.sprout, G.sprout, G.cabbage, G.cabbage, G.rice, G.rice];
-    plots.forEach(([px, py], i) => rect(px, py, 3, 2, (x, y) => { deco[at(x, y)] = crops[i]; }));
+    // 广场：四角灯笼杆，中间一棵老树
+    for (const [x, y] of [[37, 6], [54, 6], [37, 15], [54, 15]]) place(x, y, G.lanternPost);
+    place(44, 7, G.tree);
+    place(46, 13, G.hero);
+    place(47, 25, G.gui);
+    place(45, 42, G.zhou);
 
-    deco[at(21, 14)] = G.gui;
-    deco[at(41, 21)] = G.zhou;
-    deco[at(23, 5)] = G.hero;
-    place(5, 16, G.boat);
-    for (let x = 0; x < W; x++) {
-        for (let y = 15; y <= 17; y++) {
-            if (!bridgeCell.has(at(x, y)) && deco[at(x, y)] === EMPTY && rnd() < 0.06) deco[at(x, y)] = G.lily;
-        }
+    // 农田篱笆和作物
+    rect(7, 49, 21, 1, (x, y) => { deco[at(x, y)] = G.fence; });
+    rect(7, 65, 21, 1, (x, y) => { deco[at(x, y)] = G.fence; });
+    const crops = [G.sprout, G.cabbage, G.rice];
+    plots.forEach(([px, py], i) => rect(px, py, 4, 3, (x, y) => place(x, y - 1, crops[i % 3])));
+
+    // 河上的船和荷叶
+    place(10, riverY + 1, G.boat, true);
+    place(86, riverY + 2, G.boat, true);
+    for (let i = 0; i < W * H; i++) {
+        if (terr[i] === Terr.Water && !bridgeCell.has(i) && deco[i] === EMPTY && rnd() < 0.04) deco[i] = G.lily;
     }
 
     // 河岸柳树、四周圆树、零星灌木和石头
-    for (let x = 0; x < W - 1; x++) {
-        if (rnd() < 0.3 && area(x, 13, 2, 2)) place(x, 13, G.willow);
-        if (rnd() < 0.3 && area(x, 18, 2, 2)) place(x, 18, G.willow);
+    for (let x = 0; x < W - 2; x++) {
+        if (rnd() < 0.25 && fits(x, riverY - 5, G.willow)) place(x, riverY - 5, G.willow);
+        if (rnd() < 0.25 && fits(x, riverY + RIVER_H, G.willow)) place(x, riverY + RIVER_H, G.willow);
     }
-    for (let y = 0; y < H - 1; y++) {
-        for (let x = 0; x < W - 1; x++) {
-            const border = x < 2 || x >= W - 3 || y < 1 || y >= H - 3;
-            if (rnd() < (border ? 0.5 : 0.03) && area(x, y, 2, 2)) place(x, y, G.tree);
+    for (let y = 0; y < H - 4; y++) {
+        for (let x = 0; x < W - 2; x++) {
+            const border = x < 3 || x >= W - 5 || y < 2 || y >= H - 7;
+            if (rnd() < (border ? 0.45 : 0.015) && fits(x, y, G.tree)) place(x, y, G.tree);
         }
     }
     for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
-            if (!free(x, y)) continue;
+            if (!grassAt(x, y) || deco[at(x, y)] !== EMPTY) continue;
             const r = rnd();
-            if (r < 0.03) deco[at(x, y)] = G.bush;
-            else if (r < 0.045) deco[at(x, y)] = G.rocks;
+            if (r < 0.025) deco[at(x, y)] = G.bush;
+            else if (r < 0.04) deco[at(x, y)] = G.rocks;
         }
     }
 
@@ -668,13 +772,12 @@ function buildJiangnan(): MapData {
     const ground = terr.map((t, i) => {
         const x = i % W;
         const y = Math.floor(i / W);
-        if (bridgeCell.has(i)) t = Terr.Water;
         if (t === Terr.Grass) return pick(rnd, G.grass, [0.6, 0.22, 0.12, 0.06]);
         const mask = (same(x, y - 1, t) ? N : 0) | (same(x + 1, y, t) ? E : 0) | (same(x, y + 1, t) ? S : 0) | (same(x - 1, y, t) ? W_ : 0);
         const set = { [Terr.Dirt]: G.dirt, [Terr.Water]: G.water, [Terr.Soil]: G.soil, [Terr.Stone]: G.stone }[t];
         return set[mask];
     });
-    return { ground, deco };
+    return { ground, deco, over };
 }
 
 function layerData(tiles: number[]): string {
@@ -693,13 +796,14 @@ function toTmx(map: MapData, tileCount: number, rows: number): string {
         .map((t) => `      <frame tileid="${t}" duration="400"/>`)
         .join('\n');
     return '<?xml version="1.0" encoding="UTF-8"?>\n'
-        + `<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${W}" height="${H}" tilewidth="${TILE}" tileheight="${TILE}" infinite="0" nextlayerid="3" nextobjectid="1">\n`
+        + `<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${W}" height="${H}" tilewidth="${TILE}" tileheight="${TILE}" infinite="0" nextlayerid="4" nextobjectid="1">\n`
         + `  <tileset firstgid="1" name="town" tilewidth="${TILE}" tileheight="${TILE}" tilecount="${tileCount}" columns="${COLS}">\n`
         + `    <image source="town-tiles.png" width="${COLS * TILE}" height="${rows * TILE}"/>\n`
         + `    <tile id="${center}">\n      <animation>\n${frames}\n      </animation>\n    </tile>\n`
         + '  </tileset>\n'
         + layer(1, 'ground', map.ground)
         + layer(2, 'deco', map.deco)
+        + layer(3, 'over', map.over)
         + '</map>\n';
 }
 
@@ -719,9 +823,8 @@ function renderPreview(map: MapData, scale: number): Canvas {
             }
         }
     };
-    for (let i = 0; i < W * H; i++) {
-        blit(map.ground[i], i % W, Math.floor(i / W));
-        if (map.deco[i] !== EMPTY) blit(map.deco[i], i % W, Math.floor(i / W));
+    for (const layer of [map.ground, map.deco, map.over]) {
+        for (let i = 0; i < W * H; i++) if (layer[i] !== EMPTY) blit(layer[i], i % W, Math.floor(i / W));
     }
     return c;
 }
@@ -738,6 +841,6 @@ const previewIdx = process.argv.indexOf('--preview');
 if (previewIdx > 0) {
     const dir = process.argv[previewIdx + 1];
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'jiangnan-preview.png'), renderPreview(jiangnan, 2).toPng());
+    writeFileSync(join(dir, 'jiangnan-preview.png'), renderPreview(jiangnan, 1).toPng());
     console.log(`preview written to ${dir}`);
 }

@@ -61,7 +61,14 @@ function buildHud(canvasNode: Node, regionId: string): Label {
     const hud = uiNode('Hud', canvasNode);
     hud.getComponent(UITransform)!.setContentSize(DESIGN_W, HUD_H);
     // 代码搭的节点 Widget 不生效，手动贴顶，屏幕尺寸变了再贴一次
-    const stickTop = () => hud.setPosition(0, view.getVisibleSize().height / 2 - HUD_H / 2, 0);
+    const stickTop = () => {
+        // 换场景后节点已销毁，监听要跟着撤掉
+        if (!hud.isValid) {
+            view.off('canvas-resize', stickTop);
+            return;
+        }
+        hud.setPosition(0, view.getVisibleSize().height / 2 - HUD_H / 2, 0);
+    };
     stickTop();
     view.on('canvas-resize', stickTop);
 
