@@ -53,6 +53,23 @@ export interface GameState {
     wishesDone: string[];
     /** 已解锁的建筑、店铺、镇民等，如 `building:workshop`、`resident:xiaoshu`。 */
     unlocked: string[];
+    /** 自己的地盘，存档第 2 版加入。 */
+    village: VillageState;
+}
+
+/** 自己地盘上摆的一件东西。x、y 是占地左上角的格子。 */
+export interface Placement {
+    uid: number;
+    def: string;
+    x: number;
+    y: number;
+}
+
+/** 玩家自己的地盘（村庄 → 小镇 → 城市）。朋友串门时读的也是这一份。 */
+export interface VillageState {
+    tier: 'village' | 'town' | 'city';
+    items: Placement[];
+    nextUid: number;
 }
 
 export type Failure = { ok: false; reason: string };

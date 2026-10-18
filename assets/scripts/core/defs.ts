@@ -97,10 +97,53 @@ export interface RegionDef {
     seasonOverrides?: Record<string, Season[]>;
 }
 
+/** 自己地盘的规模档位，从小到大。 */
+export type Tier = 'village' | 'town' | 'city';
+export const TIER_ORDER: Tier[] = ['village', 'town', 'city'];
+
+export interface TierDef {
+    id: Tier;
+    name: string;
+    /** 地盘大小（格）。升档时往右、往下扩，已有建筑坐标不变。 */
+    size: [number, number];
+}
+
+/** 路面种类，渲染层按它挑地面图块。土路和石板路算连通。 */
+export type Terrain = 'dirt' | 'stone' | 'soil';
+
+/**
+ * 能摆在自己地盘上的东西。
+ * - building：房子、树、摊位等，占 foot 那么大一块（宽×深，格）；图比占地高的部分往上画，可以盖住后面。
+ * - ground：铺在地上的路和菜地，1×1，建筑不能压在上面。
+ */
+export interface BuildingDef {
+    id: string;
+    name: string;
+    kind: 'building' | 'ground';
+    /** 地盘到这一档才能摆。 */
+    tier: Tier;
+    price: number;
+    foot: [number, number];
+    /** building 用：建筑图集里的图名。 */
+    sprite?: string;
+    /** ground 用：铺成哪种路面。 */
+    terrain?: Terrain;
+}
+
+/** 开局送的布局，不花钱。 */
+export interface StarterItem {
+    def: string;
+    x: number;
+    y: number;
+}
+
 export interface World {
     crops: Record<string, CropDef>;
     regions: Record<string, RegionDef>;
     npcs: Record<string, NpcDef>;
     wishes: Record<string, WishDef>;
     dialogues: DialogueLine[];
+    buildings: Record<string, BuildingDef>;
+    tiers: Record<Tier, TierDef>;
+    villageStarter: StarterItem[];
 }

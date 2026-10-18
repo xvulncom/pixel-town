@@ -6,6 +6,7 @@ import { REGIONS } from './regions';
 import { NPCS } from './npcs';
 import { WISHES } from './wishes';
 import { DIALOGUES } from './dialogues';
+import { BUILDINGS, TIERS, VILLAGE_STARTER } from './buildings';
 
 export const WORLD: World = {
     crops: CROPS,
@@ -13,4 +14,7 @@ export const WORLD: World = {
     npcs: NPCS,
     wishes: WISHES,
     dialogues: DIALOGUES,
+    buildings: BUILDINGS,
+    tiers: TIERS,
+    villageStarter: VILLAGE_STARTER,
 };

@@ -1,6 +1,7 @@
 // 地图视图：单指拖动、双指缩放（开发者工具里用滚轮缩放），不让地图拖出屏幕。
+// 触摸挂在地图节点上：点在顶栏、建造栏这些界面上时不会拖动地图。
 
-import { _decorator, Component, EventMouse, EventTouch, Input, input, UITransform, Vec2, view } from 'cc';
+import { _decorator, Component, EventMouse, EventTouch, Node, UITransform, Vec2, view } from 'cc';
 
 const { ccclass } = _decorator;
 
@@ -14,25 +15,33 @@ function clamp(v: number, lo: number, hi: number): number {
 
 @ccclass('MapView')
 export class MapView extends Component {
+    /** 屏幕上下被界面挡住的高度（设计分辨率像素），地图能多拖一点，边上的格子不会藏在界面底下。 */
+    insetTop = 0;
+    insetBottom = 0;
     private zoom = DEFAULT_SCALE;
     private pinchDist = 0;
 
     onEnable(): void {
-        input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
-        input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
-        input.on(Input.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
-        input.on(Input.EventType.MOUSE_WHEEL, this.onWheel, this);
+        this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
+        this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
+        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+        this.node.on(Node.EventType.MOUSE_WHEEL, this.onWheel, this);
     }
 
     onDisable(): void {
-        input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
-        input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
-        input.off(Input.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
-        input.off(Input.EventType.MOUSE_WHEEL, this.onWheel, this);
+        this.node.off(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
+        this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
+        this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+        this.node.off(Node.EventType.MOUSE_WHEEL, this.onWheel, this);
     }
 
     start(): void {
         this.setZoom(DEFAULT_SCALE);
+    }
+
+    /** 地图内容大小变了（比如地盘升档）之后调用，重新算缩放和边界。 */
+    relayout(): void {
+        this.setZoom(this.zoom);
     }
 
     private onTouchMove(e: EventTouch): void {
@@ -63,13 +72,13 @@ export class MapView extends Component {
         // 最小缩放至少要铺满屏幕，长屏手机上不露边
         const ui = this.node.getComponent(UITransform);
         const vis = view.getVisibleSize();
-        const cover = ui ? Math.max(vis.width / ui.width, vis.height / ui.height) : MIN_SCALE;
+        const cover = ui && ui.width > 0 ? Math.max(vis.width / ui.width, vis.height / ui.height) : MIN_SCALE;
         this.zoom = clamp(z, Math.max(MIN_SCALE, cover), MAX_SCALE);
         this.node.setScale(this.zoom, this.zoom, 1);
         this.moveTo(this.node.position.x, this.node.position.y);
     }
 
-    /** 地图比屏幕大时只能拖到边缘，比屏幕小时居中。 */
+    /** 地图比屏幕大时只能拖到边缘（上下各多让出被界面挡住的那段），比屏幕小时居中。 */
     private moveTo(x: number, y: number): void {
         const ui = this.node.getComponent(UITransform);
         if (!ui) {
@@ -78,6 +87,6 @@ export class MapView extends Component {
         const vis = view.getVisibleSize();
         const maxX = Math.max(0, (ui.width * this.zoom - vis.width) / 2);
         const maxY = Math.max(0, (ui.height * this.zoom - vis.height) / 2);
-        this.node.setPosition(clamp(x, -maxX, maxX), clamp(y, -maxY, maxY), 0);
+        this.node.setPosition(clamp(x, -maxX, maxX), clamp(y, -maxY - this.insetTop, maxY + this.insetBottom), 0);
     }
 }

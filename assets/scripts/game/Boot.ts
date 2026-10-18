@@ -1,21 +1,25 @@
 // 启动：主场景只是个空壳，相机、画布、地图、顶栏都在这里用代码搭，场景文件不用手工维护。
 // 模块加载时注册场景启动回调，Cocos 会在启动时导入所有项目脚本。
+// 画面分两处：自己的地盘（Village，开局进这里）和官方场地（Map，地域的镇子），顶栏按钮来回切。
 
 import {
-    Camera, Canvas, Color, Director, director, Graphics, Label, Layers, Node, ResolutionPolicy,
+    Camera, Canvas, Color, Director, director, Graphics, Label, Node, ResolutionPolicy,
     profiler, resources, Scene, Texture2D, TiledMap, TiledMapAsset, UITransform, view,
 } from 'cc';
 import { MapView } from './MapView';
 import { People } from './People';
 import { DayLight } from './DayLight';
+import { VillageView } from './VillageView';
+import { PANEL_H, VillageBuild } from './VillageBuild';
+import { loadOrNew, localStore } from './Store';
+import { button, UI_LAYER, uiNode } from './ui';
 import { WORLD } from '../data/world';
 import { SEASON_NAMES, solarTermAt } from '../core/calendar';
 import { weatherOn } from '../core/weather';
-import { Weather } from '../core/types';
+import { GameState, Weather } from '../core/types';
 
 const DESIGN_W = 720;
 const DESIGN_H = 1280;
-const UI = Layers.Enum.UI_2D;
 const HUD_H = 120;
 
 const WEATHER_NAMES: Record<Weather, string> = {
@@ -25,29 +29,21 @@ const WEATHER_NAMES: Record<Weather, string> = {
     snow: '雪',
 };
 
-function uiNode(name: string, parent: Node): Node {
-    const n = new Node(name);
-    n.layer = UI;
-    parent.addChild(n);
-    n.addComponent(UITransform);
-    return n;
-}
-
 function buildCanvas(scene: Scene): Node {
     view.setDesignResolutionSize(DESIGN_W, DESIGN_H, ResolutionPolicy.FIXED_WIDTH);
 
     const canvasNode = new Node('Canvas');
-    canvasNode.layer = UI;
+    canvasNode.layer = UI_LAYER;
     scene.addChild(canvasNode);
     canvasNode.addComponent(UITransform);
 
     const camNode = new Node('Camera');
-    camNode.layer = UI;
+    camNode.layer = UI_LAYER;
     canvasNode.addChild(camNode);
     camNode.setPosition(0, 0, 1000);
     const cam = camNode.addComponent(Camera);
     cam.projection = Camera.ProjectionType.ORTHO;
-    cam.visibility = UI;
+    cam.visibility = UI_LAYER;
     cam.clearFlags = Camera.ClearFlag.SOLID_COLOR;
     cam.clearColor = new Color(32, 48, 32, 255);
     cam.near = 1;
@@ -59,9 +55,13 @@ function buildCanvas(scene: Scene): Node {
     return canvasNode;
 }
 
-function buildHud(canvasNode: Node, regionId: string): Label {
-    const hud = uiNode('Hud', canvasNode);
-    hud.getComponent(UITransform)!.setContentSize(DESIGN_W, HUD_H);
+interface Hud {
+    label: Label;
+    setPlace(where: 'village' | 'town'): void;
+}
+
+function buildHud(canvasNode: Node, state: GameState, onToggle: () => void): Hud {
+    const hud = uiNode('Hud', canvasNode, DESIGN_W, HUD_H);
     // 代码搭的节点 Widget 不生效，手动贴顶，屏幕尺寸变了再贴一次
     const stickTop = () => {
         // 换场景后节点已销毁，监听要跟着撤掉
@@ -78,9 +78,11 @@ function buildHud(canvasNode: Node, regionId: string): Label {
     bg.fillColor = new Color(0, 0, 0, 140);
     bg.rect(-DESIGN_W / 2, -HUD_H / 2, DESIGN_W, HUD_H);
     bg.fill();
+    // 点在顶栏上不拖地图
+    hud.on(Node.EventType.TOUCH_START, () => undefined);
 
-    const textNode = uiNode('Text', hud);
-    textNode.getComponent(UITransform)!.setContentSize(DESIGN_W - 40, HUD_H);
+    const textNode = uiNode('Text', hud, DESIGN_W - 220, HUD_H);
+    textNode.setPosition(-90, 0, 0);
     const label = textNode.addComponent(Label);
     label.fontSize = 28;
     label.lineHeight = 40;
@@ -89,21 +91,30 @@ function buildHud(canvasNode: Node, regionId: string): Label {
     label.verticalAlign = Label.VerticalAlign.CENTER;
     label.overflow = Label.Overflow.SHRINK;
 
+    const toggle = button(hud, '去镇上', 170, 70, onToggle, 'Toggle');
+    toggle.node.setPosition(DESIGN_W / 2 - 100, 0, 0);
+
     const now = Date.now();
-    const region = WORLD.regions[regionId];
+    const region = WORLD.regions[state.region];
     const term = solarTermAt(now);
     const weather = weatherOn(now, region);
-    label.string = `像素小镇 · ${region.name}\n${term.name}（${SEASON_NAMES[term.season]}）· ${WEATHER_NAMES[weather]} · 拖动看看，双指缩放`;
-    return label;
+    const day = `${term.name}（${SEASON_NAMES[term.season]}）· ${WEATHER_NAMES[weather]}`;
+    return {
+        label,
+        setPlace(where) {
+            const tier = WORLD.tiers[state.village.tier].name;
+            label.string = where === 'village' ? `我的${tier}\n${day}` : `${region.name} · 镇上\n${day} · 拖动看看`;
+            toggle.label.string = where === 'village' ? '去镇上' : `回${tier}`;
+        },
+    };
 }
 
-function buildMap(canvasNode: Node, regionId: string, hudLabel: Label): void {
-    const mapNode = uiNode('Map', canvasNode);
-    mapNode.setSiblingIndex(1);
+/** 官方场地：地域的镇子，第一次去的时候才加载。 */
+function loadTown(mapNode: Node, regionId: string, hud: Hud): void {
     resources.load(`maps/${WORLD.regions[regionId].map}`, TiledMapAsset, (err, asset) => {
         if (err || !asset) {
             console.error('地图加载失败', err);
-            hudLabel.string = '地图加载失败';
+            hud.label.string = '地图加载失败';
             return;
         }
         // 像素风：关掉线性过滤，放大后不糊
@@ -112,28 +123,57 @@ function buildMap(canvasNode: Node, regionId: string, hudLabel: Label): void {
         }
         const tiled = mapNode.addComponent(TiledMap);
         tiled.tmxAsset = asset;
-        mapNode.addComponent(MapView);
+        mapNode.addComponent(MapView).insetTop = HUD_H;
         const people = mapNode.addComponent(People);
         people.mapPath = `maps/${WORLD.regions[regionId].map}`;
     });
 }
 
-/** 晨昏光照：盖在地图上、顶栏下。 */
-function buildLight(canvasNode: Node): void {
-    const light = uiNode('DayLight', canvasNode);
-    light.setSiblingIndex(2);
-    light.addComponent(Graphics);
-    light.addComponent(DayLight);
-}
-
 function buildMain(scene: Scene): void {
     profiler.hideStats();
-    // 一期只有江南地图；选老家界面做好后从存档读地域
-    const regionId = 'jiangnan';
+    const store = localStore;
+    // 新开局的老家先固定江南；选老家界面做好后在开局时选
+    const state = loadOrNew(store, WORLD, 'jiangnan');
     const canvasNode = buildCanvas(scene);
-    const hudLabel = buildHud(canvasNode, regionId);
-    buildMap(canvasNode, regionId, hudLabel);
-    buildLight(canvasNode);
+
+    // 从下往上：镇子、自己的地盘、光照、建造栏、顶栏
+    const town = uiNode('Map', canvasNode);
+    town.active = false;
+    const village = uiNode('Village', canvasNode);
+    const light = uiNode('DayLight', canvasNode);
+    light.addComponent(Graphics);
+    light.addComponent(DayLight);
+    const panel = uiNode('BuildPanel', canvasNode, DESIGN_W, PANEL_H);
+
+    let where: 'village' | 'town' = 'village';
+    let townLoaded = false;
+    const hud = buildHud(canvasNode, state, () => {
+        where = where === 'village' ? 'town' : 'village';
+        if (where === 'town' && !townLoaded) {
+            townLoaded = true;
+            loadTown(town, state.region, hud);
+        }
+        town.active = where === 'town';
+        village.active = panel.active = where === 'village';
+        hud.setPlace(where);
+    });
+    hud.setPlace(where);
+
+    const vv = village.addComponent(VillageView);
+    vv.world = WORLD;
+    vv.village = state.village;
+    const mv = village.addComponent(MapView);
+    mv.insetTop = HUD_H;
+    mv.insetBottom = PANEL_H;
+    vv.onReady = () => {
+        mv.relayout();
+        const build = panel.addComponent(VillageBuild);
+        build.world = WORLD;
+        build.state = state;
+        build.store = store;
+        build.view = vv;
+        build.onChange = () => hud.setPlace(where);
+    };
 }
 
 function onLaunch(scene: Scene): void {

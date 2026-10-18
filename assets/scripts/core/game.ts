@@ -7,8 +7,10 @@ import { emptyPlot } from './farm';
 import { inSeason } from './region';
 import { seedItem } from './inventory';
 import { newNpcState } from './npc';
+import { newVillage, repairVillage } from './village';
 
-export const SAVE_VERSION = 1;
+/** 第 2 版：加自己的地盘 village。 */
+export const SAVE_VERSION = 2;
 export const START_GOLD = 300;
 export const START_PLOTS = 6;
 export const STARTER_SEEDS = 5;
@@ -46,6 +48,7 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         region: regionId,
         wishesDone: [],
         unlocked: [],
+        village: newVillage(world),
     };
 }
 
@@ -68,6 +71,8 @@ export function deserialize(json: string, world: World): GameState {
     data.helpers ??= [];
     data.wishesDone ??= [];
     data.unlocked ??= [];
+    // 第 1 版没有地盘，读档时送开局布局；以后删掉的建筑在这里清掉
+    data.village = data.village ? repairVillage(world, data.village) : newVillage(world);
     if (!world.regions[data.region]) {
         throw new Error('存档里的地域不存在');
     }
