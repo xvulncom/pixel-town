@@ -6,6 +6,8 @@ import {
     profiler, resources, Scene, Texture2D, TiledMap, TiledMapAsset, UITransform, view,
 } from 'cc';
 import { MapView } from './MapView';
+import { People } from './People';
+import { DayLight } from './DayLight';
 import { WORLD } from '../data/world';
 import { SEASON_NAMES, solarTermAt } from '../core/calendar';
 import { weatherOn } from '../core/weather';
@@ -111,7 +113,17 @@ function buildMap(canvasNode: Node, regionId: string, hudLabel: Label): void {
         const tiled = mapNode.addComponent(TiledMap);
         tiled.tmxAsset = asset;
         mapNode.addComponent(MapView);
+        const people = mapNode.addComponent(People);
+        people.mapPath = `maps/${WORLD.regions[regionId].map}`;
     });
+}
+
+/** 晨昏光照：盖在地图上、顶栏下。 */
+function buildLight(canvasNode: Node): void {
+    const light = uiNode('DayLight', canvasNode);
+    light.setSiblingIndex(2);
+    light.addComponent(Graphics);
+    light.addComponent(DayLight);
 }
 
 function buildMain(scene: Scene): void {
@@ -121,6 +133,7 @@ function buildMain(scene: Scene): void {
     const canvasNode = buildCanvas(scene);
     const hudLabel = buildHud(canvasNode, regionId);
     buildMap(canvasNode, regionId, hudLabel);
+    buildLight(canvasNode);
 }
 
 function onLaunch(scene: Scene): void {

@@ -20,5 +20,5 @@
 ## 命令
 
 - 测试 `npm test`，类型检查 `npm run typecheck`。
-- 生成图块和地图 `npx tsx tools/gen-map.ts [--preview <目录>]`。
+- 生成图块和地图 `npx tsx tools/gen-map.ts [--preview <目录>]`。图块画法在 `tools/art/`，新图块到 `tools/art/tileset.ts` 登记；地图摆放在 `tools/maps/`（`builder.ts` 通用，每个地域一个布局文件）。产物：`town-tiles.png`、`people.png`、`people-frames.json`、`<地域>.tmx`、`<地域>.walkers.json`。`--preview` 另出整图和四张手机视角图。
 - 构建 `powershell -NoProfile -ExecutionPolicy Bypass -File tools/cocos-build.ps1 -Config tools/build-wechatgame.json`（网页版换 `build-web-mobile.json`）。
