@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { SAVE_VERSION, deserialize, newGame, serialize } from '../assets/scripts/core/game';
 import {
     anchorFromCell, canPlace, E, N, newVillage, occupancy, place, removeAt, S, terrainGrid, terrainMask, W,

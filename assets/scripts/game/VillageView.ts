@@ -279,6 +279,11 @@ export class VillageView extends Component {
         return set ? this.tileFrame(set[15]) : null;
     }
 
+    /** 地盘第 x 列第 y 行那格的底边中点（节点坐标），画人用：人的锚点在脚底。 */
+    footOf(x: number, y: number): [number, number] {
+        return this.footBottom(x, y, [1, 1]);
+    }
+
     private cellTopLeft(x: number, y: number): [number, number] {
         const t = this.node.getComponent(UITransform)!;
         return [(x + this.margin) * TILE - t.width / 2, t.height / 2 - (y + this.margin) * TILE];

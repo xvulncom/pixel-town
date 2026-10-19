@@ -61,6 +61,74 @@ export interface GameState {
     fishLog: Record<string, number>;
     /** 每天重置的记录，存档第 4 版加入。 */
     daily: DailyState;
+    /** 雇来的人，存档第 5 版加入。 */
+    workers: Worker[];
+    /** 空地种什么（玩家在建造栏选的种子），工人和巡村都按它种。 */
+    farmSeed: string;
+    /** 玩家最近一次开着游戏的时刻，工人据此判断有没有人看着。 */
+    lastSeen: number;
+    /** 助理正在跑的差事 */
+    errand: Errand | null;
+    /** 助理从招工处带回来的名单 */
+    hireReport: HireReport | null;
+    /** 工人动态，新的在后面 */
+    workerLog: WorkerEvent[];
+}
+
+export type PayMode = 'day' | 'piece';
+/** 工人此刻在干什么，画面据此摆人。 */
+export type WorkerActivity = 'off' | 'work' | 'idle' | 'slack' | 'errand';
+
+/** 一个雇来的人。source 区分镇上的 NPC 和好友（好友以后接后端）。 */
+export interface Worker {
+    id: string;
+    source: 'npc' | 'player';
+    pay: PayMode;
+    /** 日薪，或计件时每件的钱 */
+    wage: number;
+    /** 签约时出价的倍数（相对要价），决定偷懒 */
+    rate: number;
+    hiredAt: number;
+    /** 心情 0～100 */
+    morale: number;
+    /** 欠他的钱 */
+    owed: number;
+    /** 连着欠薪几次 */
+    unpaid: number;
+    /** 没干完的零头活（件数小数部分） */
+    carry: number;
+    doing: WorkerActivity;
+    /** 最近干活的那格菜地（Placement.uid） */
+    at: number | null;
+    today: WorkerDay;
+}
+
+export interface WorkerDay {
+    day: string;
+    done: number;
+    slackMin: number;
+    eaten: number;
+    /** 今天付给他的钱 */
+    paid: number;
+}
+
+export interface Errand {
+    by: string;
+    kind: 'hire';
+    until: number;
+}
+
+export interface HireReport {
+    day: string;
+    by: string;
+    /** 名单和助理的评价 */
+    candidates: { id: string; rumor: string }[];
+}
+
+export interface WorkerEvent {
+    t: number;
+    who: string;
+    text: string;
 }
 
 /** 按北京时间切日，换了一天就清零（见 core/daily.ts）。 */

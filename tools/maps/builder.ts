@@ -16,6 +16,15 @@ export interface Walker {
     speed: number;
 }
 
+/** 地图上能点的地方（招工处等），游戏里点到这块格子就打开对应的界面。 */
+export interface Place {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
 export interface MapData {
     w: number;
     h: number;
@@ -23,6 +32,7 @@ export interface MapData {
     deco: number[];
     over: number[];
     walkers: Walker[];
+    places: Place[];
 }
 
 const isRoad = (t: Terr) => t === Terr.Dirt || t === Terr.Stone;
@@ -33,6 +43,7 @@ export class MapBuilder {
     readonly over: number[];
     readonly bridge = new Set<number>();
     readonly walkers: Walker[] = [];
+    readonly places: Place[] = [];
     readonly rnd: Rnd;
 
     constructor(readonly w: number, readonly h: number, seed: number) {
@@ -187,6 +198,6 @@ export class MapBuilder {
             const set = { [Terr.Dirt]: G.dirt, [Terr.Water]: G.water, [Terr.Soil]: G.soil, [Terr.Stone]: G.stone }[t];
             return set[mask];
         });
-        return { w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers };
+        return { w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places };
     }
 }

@@ -106,6 +106,7 @@ writeFileSync(join(out, 'people-frames.json'), JSON.stringify({
 }, null, 2) + '\n');
 writeFileSync(join(out, 'jiangnan.tmx'), toTmx(jiangnan, sheet.tiles.length, tileset.h / TILE));
 writeFileSync(join(out, 'jiangnan.walkers.json'), JSON.stringify(jiangnan.walkers, null, 2) + '\n');
+writeFileSync(join(out, 'jiangnan.places.json'), JSON.stringify(jiangnan.places, null, 2) + '\n');
 
 // 自己地盘用：建筑整图图集 + 路面图块编号（地面图块仍在 town-tiles.png 里）
 const objects = packObjects();

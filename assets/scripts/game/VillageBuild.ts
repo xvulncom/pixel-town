@@ -1,18 +1,19 @@
 // 建造栏：竖屏在底部一排建筑卡片，横屏在右侧一列（卡片排成网格）；位置大小由 core/screen 的 screenLayout 给。
 // 选中卡片后在地图上点格子摆放；路和菜地点一下铺一格，房子先出虚影再点「放这里」。
 // 「拆除」模式下点哪拆哪，退一半钱。没选东西时点菜地种菜、浇水、收获卖钱。每次改动都存档。
-// 作物生长按真实时间走：开局先结算离线这段，之后每半分钟推进一次。「巡村」一键把整片地收、浇、种一遍。
+// 作物生长和工人由常驻模拟（Sim）推进，这里只听它的 'tick' 刷新画面；开局时把离线这段的结果说一句。「巡村」一键把整片地收、浇、种一遍。
 // 屏幕转了由 Boot 整个重搭，这里不监听尺寸变化。
 
 import { _decorator, Color, Component, EventTouch, Graphics, Label, Node, Size, Sprite, UITransform, Vec2 } from 'cc';
 import { BuildingDef, World } from '../core/defs';
 import { GameState } from '../core/types';
 import { plotIndexAt, seedChoices, tend } from '../core/fields';
-import { simulate } from '../core/simulate';
+import { OfflineReport, simulate } from '../core/simulate';
 import { patrol, patrolSummary } from '../core/patrol';
 import { Rect } from '../core/screen';
 import { anchorFromCell, canPlace, place, removeAt, tierUnlocked } from '../core/village';
 import { saveGame, SaveStore } from './Store';
+import { simEvents } from './Sim';
 import { VillageView } from './VillageView';
 import { ACCENT, button, Button, drawBox, GOLD, INK, label, MUTED, PAPER, uiNode } from './ui';
 
@@ -23,8 +24,6 @@ export const PANEL_H = 330;
 const PANEL_BG = new Color(40, 30, 22, 225);
 /** 手指移动不超过这么多算点了一下，超过算拖地图。 */
 const TAP_SLOP = 12;
-/** 在线时推进作物生长的间隔（秒）。 */
-const TICK_S = 30;
 const IDLE_HINT = '点菜地种菜，熟了点一下就卖钱';
 
 type Mode = { kind: 'idle' } | { kind: 'place'; def: BuildingDef; x: number; y: number } | { kind: 'remove' };
@@ -46,6 +45,8 @@ export class VillageBuild extends Component {
     side = false;
     /** 金币、地盘变了之后通知顶栏。 */
     onChange: (() => void) | null = null;
+    /** 开机时离线那段的结算，第一次打开时说一句，说完清掉 */
+    report: { value: OfflineReport | null } = { value: null };
 
     private mode: Mode = { kind: 'idle' };
     private page = 0;
@@ -57,8 +58,14 @@ export class VillageBuild extends Component {
     private okBtn: Button | null = null;
     private cancelBtn: Button | null = null;
     private seedBtn: Button | null = null;
-    /** 点空菜地时种什么，作物 id。 */
-    private seed = '';
+    /** 点空菜地时种什么，作物 id；存在存档里，工人也按它种。 */
+    private get seed(): string {
+        return this.state.farmSeed;
+    }
+
+    private set seed(v: string) {
+        this.state.farmSeed = v;
+    }
     private touchStart: Vec2 | null = null;
     private cardW = 140;
     private cardH = 170;
@@ -99,11 +106,12 @@ export class VillageBuild extends Component {
         this.renderCards();
         this.setMode({ kind: 'idle' });
         this.nextSeed(0);
-        this.tick(true);
-        this.schedule(() => this.tick(false), TICK_S);
+        this.greet();
+        simEvents.on('tick', this.onTick, this);
     }
 
     onDestroy(): void {
+        simEvents.off('tick', this.onTick, this);
         const mapNode = this.view?.node;
         if (mapNode?.isValid) {
             mapNode.off(Node.EventType.TOUCH_START, this.onMapStart, this);
@@ -191,13 +199,26 @@ export class VillageBuild extends Component {
         this.changed();
     }
 
-    /** 推进作物生长；开局那次把离线期间熟了多少告诉玩家。 */
-    private tick(first: boolean): void {
-        const r = simulate(this.state, this.world, Date.now());
-        if (first && r.matured > 0) this.say(`离开这段时间熟了 ${r.matured} 块地，点一下就能卖`);
-        if (first && r.withered > 0) this.say(`换季了，${r.withered} 块地的苗枯了，点一下清掉`);
-        saveGame(this.store, this.state);
+    /** 开局说一句：空地盘教怎么起步，离开过就说说这段时间地里怎样了。 */
+    private greet(): void {
+        const r = this.report.value;
+        this.report.value = null;
+        if (this.state.village.items.length === 0) {
+            this.say('一块空地，只有你自己。先铺几格菜地种菜挣钱，盖了民居才能雇人');
+        } else if (r && r.withered > 0) {
+            this.say(`换季了，${r.withered} 块地的苗枯了，点一下清掉`);
+        } else if (r && r.matured > 0) {
+            this.say(`离开这段时间熟了 ${r.matured} 块地，点一下就能卖`);
+        }
         this.view.refresh();
+    }
+
+    /** 常驻模拟推进了一次：重画地里、刷新金币。 */
+    private onTick(): void {
+        if (!this.node.isValid) return;
+        this.view.refresh();
+        this.refreshGold();
+        this.onChange?.();
     }
 
     /** 换下一种种子（d=0 只校正当前选择，比如换季后原来的种不了了）。 */

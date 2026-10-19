@@ -8,6 +8,7 @@ param(
 
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $configPath = (Resolve-Path $Config).Path
+
 $log = Join-Path $env:TEMP 'cocos-build.log'
 $err = Join-Path $env:TEMP 'cocos-build.err'
 Remove-Item $log, $err -ErrorAction SilentlyContinue

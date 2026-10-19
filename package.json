@@ -8,7 +8,8 @@
   "description": "像素小镇：2D 像素风小镇经营养成微信小游戏",
   "scripts": {
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.core.json"
+    "typecheck": "tsc -p tsconfig.core.json",
+    "build:cloud": "esbuild tools/cloud-entry.ts --bundle --platform=node --format=cjs --target=es2019 --outfile=cloud/functions/workerTick/core.js"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

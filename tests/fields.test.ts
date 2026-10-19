@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { deserialize, newGame, serialize } from '../assets/scripts/core/game';
 import { cropSprite, cropStage, plotIndexAt, seedChoices, tend } from '../assets/scripts/core/fields';
 import { place, removeAt } from '../assets/scripts/core/village';

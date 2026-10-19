@@ -66,6 +66,9 @@ export function buildJiangnan(): MapData {
     b.place(37, 16, G.bench);
     b.place(51, 16, G.bench);
     b.place(42, 16, G.archway);
+    // 招工处：广场东边的告示栏，整块（含檐）都能点
+    b.place(55, 6, G.hireBoard);
+    b.places.push({ id: 'hiring', x: 55, y: 6, w: 3, h: 3 });
 
     // ---------- 人家 ----------
     const house = () => pick(rnd, G.houses, [0.3, 0.4, 0.3]);

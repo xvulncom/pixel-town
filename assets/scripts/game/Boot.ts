@@ -2,10 +2,13 @@
 // 模块加载时注册场景启动回调，Cocos 会在启动时导入所有项目脚本。
 // 画面分两处：自己的地盘（Village，开局进这里）和官方场地（Map，地域的镇子），顶栏按钮来回切。
 // 横竖屏都能玩：屏幕转了（或窗口大小变了）就存档、把画布整个拆掉按新尺寸重搭，排版规则在 core/screen.ts。
+// 作物和工人由常驻模拟节点 Sim 推进（开机就起，挂在常驻根节点上），画布重搭不影响它。
+// 招人在镇上广场的招工告示栏（亲自去），或者让助理跑一趟后看他带回的名单。
 
 import {
-    Camera, Canvas, Color, Director, director, Graphics, Label, Node, ResolutionPolicy,
-    HorizontalTextAlignment, profiler, resources, Scene, screen, Texture2D, TiledMap, TiledMapAsset, UITransform, view,
+    Camera, Canvas, Color, Director, director, EventTouch, Graphics, JsonAsset, Label, Node, ResolutionPolicy,
+    HorizontalTextAlignment, profiler, resources, Scene, screen, Texture2D, TiledMap, TiledMapAsset, UITransform, Vec2, Vec3,
+    view,
 } from 'cc';
 import { MapView } from './MapView';
 import { People } from './People';
@@ -14,6 +17,12 @@ import { VillageView } from './VillageView';
 import { PANEL_H, VillageBuild } from './VillageBuild';
 import { FishingView } from './FishingView';
 import { MarketView } from './MarketView';
+import { HiringView } from './HiringView';
+import { WorkersView } from './WorkersView';
+import { VillageWorkers } from './VillageWorkers';
+import { Sim, simEvents } from './Sim';
+import { makeCloudSync } from './CloudStore';
+import { HireVia } from '../core/workers';
 import { loadOrNew, localStore, saveGame, SaveStore } from './Store';
 import { button, GOLD, INK, label, UI_LAYER, uiNode } from './ui';
 import { canRotate, rotateTo, screenInsets } from './SafeArea';
@@ -151,8 +160,71 @@ function buildHud(canvasNode: Node, W: number, state: GameState, layout: HudLayo
     };
 }
 
+/** 镇上能点的地方，格子坐标（gen-map 生成的 <地图>.places.json） */
+interface TownPlace {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+const PLACE_NAMES: Record<string, string> = { hiring: '招工处' };
+
+/** 镇子地图里第 x 列第 y 行格子中心的节点坐标（地图节点以中心为原点）。 */
+function townCell(mapNode: Node, x: number, y: number): [number, number] {
+    const ui = mapNode.getComponent(UITransform)!;
+    return [(x + 0.5) * 16 - ui.width / 2, ui.height / 2 - (y + 0.5) * 16];
+}
+
+/**
+ * 镇上能点的地方：每处头上挂个牌子，点到那块格子（含上面一行屋檐）就调 onPlace。
+ * 招工处要人亲自到镇上来点，这就是"亲自前往"。ready 交回一个把地图挪到某处的函数。
+ */
+function bindPlaces(mapNode: Node, mapPath: string, onPlace: (id: string) => void, ready: (focus: (id: string) => void) => void): void {
+    resources.load(`${mapPath}.places`, JsonAsset, (err, asset) => {
+        if (err || !asset || !mapNode.isValid) return;
+        const places = asset.json as TownPlace[];
+        for (const p of places) {
+            const tagNode = uiNode(`Tag-${p.id}`, mapNode, 44, 14);
+            const g = tagNode.addComponent(Graphics);
+            g.fillColor = new Color(150, 40, 30, 230);
+            g.roundRect(-22, -7, 44, 14, 3);
+            g.fill();
+            label(tagNode, PLACE_NAMES[p.id] ?? p.id, 10, INK, 44, 14);
+            const [cx, cy] = townCell(mapNode, p.x + (p.w - 1) / 2, p.y);
+            tagNode.setPosition(cx, cy + 14, 0);
+        }
+        let start: Vec2 | null = null;
+        mapNode.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            start = e.getAllTouches().length === 1 ? e.getUILocation() : null;
+        });
+        mapNode.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+            const s = start;
+            start = null;
+            if (!s || Vec2.distance(s, e.getUILocation()) > 12) return;
+            const ui = mapNode.getComponent(UITransform)!;
+            const vis = view.getVisibleSize();
+            const canvas = mapNode.parent!.getComponent(UITransform)!;
+            const loc = e.getUILocation();
+            const p = ui.convertToNodeSpaceAR(canvas.convertToWorldSpaceAR(new Vec3(loc.x - vis.width / 2, loc.y - vis.height / 2, 0)));
+            const tx = Math.floor((p.x + ui.width / 2) / 16);
+            const ty = Math.floor((ui.height / 2 - p.y) / 16);
+            const hit = places.find((q) => tx >= q.x && tx < q.x + q.w && ty >= q.y - 1 && ty < q.y + q.h);
+            if (hit) onPlace(hit.id);
+        });
+        ready((id) => {
+            const p = places.find((q) => q.id === id);
+            if (!p) return;
+            const [cx, cy] = townCell(mapNode, p.x + (p.w - 1) / 2, p.y + (p.h - 1) / 2);
+            mapNode.getComponent(MapView)?.focus(cx, cy);
+        });
+    });
+}
+
 /** 官方场地：地域的镇子，第一次去的时候才加载。 */
-function loadTown(mapNode: Node, regionId: string, hud: Hud, layout: ScreenLayout): void {
+function loadTown(mapNode: Node, regionId: string, hud: Hud, layout: ScreenLayout,
+    onPlace: (id: string) => void, ready: (focus: (id: string) => void) => void): void {
     resources.load(`maps/${WORLD.regions[regionId].map}`, TiledMapAsset, (err, asset) => {
         if (err || !asset) {
             console.error('地图加载失败', err);
@@ -171,6 +243,7 @@ function loadTown(mapNode: Node, regionId: string, hud: Hud, layout: ScreenLayou
         mv.insetBottom = layout.hud.bottomPad;
         const people = mapNode.addComponent(People);
         people.mapPath = `maps/${WORLD.regions[regionId].map}`;
+        bindPlaces(mapNode, people.mapPath, onPlace, ready);
     });
 }
 
@@ -194,7 +267,7 @@ function buildActions(canvasNode: Node, W: number, H: number, layout: ScreenLayo
 
 let current: { orientation: Orientation; w: number; h: number; teardown: () => void } | null = null;
 
-function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
+function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): void {
     profiler.hideStats();
     const win = screen.windowSize;
     const orientation = orientationOf(win.width, win.height);
@@ -218,6 +291,9 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
     let build: VillageBuild | null = null;
     let overlay: Node | null = null;
     let actions: Node | null = null;
+    let townActions: Node | null = null;
+    let focusTown: ((id: string) => void) | null = null;
+    let workers: VillageWorkers | null = null;
     const closeOverlay = () => {
         if (overlay?.isValid) overlay.destroy();
         overlay = null;
@@ -226,13 +302,18 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
         const v = where === 'village';
         panel.active = v;
         if (actions) actions.active = v && !overlay;
+        if (townActions) townActions.active = !v && !overlay;
     };
     const hud = buildHud(canvasNode, W, state, layout.hud, orientation, () => {
         closeOverlay();
         where = where === 'village' ? 'town' : 'village';
         if (where === 'town' && !townLoaded) {
             townLoaded = true;
-            loadTown(town, state.region, hud, layout);
+            loadTown(town, state.region, hud, layout, (id) => {
+                if (id === 'hiring') openHiring('self');
+            }, (f) => {
+                focusTown = f;
+            });
         }
         town.active = where === 'town';
         village.active = where === 'village';
@@ -240,7 +321,7 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
         hud.setPlace(where);
     }, canRotate() ? () => {
         saveGame(store, state);
-        rotateTo(orientation === 'portrait' ? 'landscape' : 'portrait', () => setTimeout(() => checkScreen(scene, state, store), 300));
+        rotateTo(orientation === 'portrait' ? 'landscape' : 'portrait', () => setTimeout(() => checkScreen(scene, state, store, sim), 300));
     } : null);
     hud.setPlace(where);
 
@@ -258,6 +339,25 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
         showVillageUi();
         build?.changed();
     };
+    /** 雇人、辞退、调薪之后：推进一下、存档、重摆地盘上的人 */
+    const onWorkersChanged = () => {
+        sim.step();
+        build?.changed();
+        workers?.sync();
+    };
+    /** 招工处：self 是人在镇上点了告示栏，assistant 是看助理带回的名单 */
+    const openHiring = (via: HireVia) => openOverlay('Hiring', (n) => {
+        const v = n.addComponent(HiringView);
+        Object.assign(v, { world: WORLD, state, via, onChanged: onWorkersChanged, onClose: onOverlayClosed });
+    });
+    // 镇上右下角：去招工处（把地图挪到告示栏那儿，要点告示栏才能招人）
+    townActions = buildActions(canvasNode, W, H, layout, [
+        ['招工处', () => {
+            focusTown?.('hiring');
+            hud.say('广场东边的告示栏就是招工处，点它');
+        }],
+    ]);
+    townActions.active = false;
 
     const vv = village.addComponent(VillageView);
     vv.world = WORLD;
@@ -280,8 +380,18 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
         build.side = layout.orientation === 'landscape';
         build.bottomPad = build.side ? 0 : layout.hud.bottomPad;
         build.onChange = () => hud.setPlace(where);
+        build.report = sim.report;
+        workers = village.addComponent(VillageWorkers);
+        Object.assign(workers, { world: WORLD, state, view: vv });
         actions = buildActions(canvasNode, W, H, layout, [
             ['巡村', () => build?.patrolAll()],
+            ['工人', () => openOverlay('Workers', (n) => {
+                const v = n.addComponent(WorkersView);
+                Object.assign(v, {
+                    world: WORLD, state, onChanged: onWorkersChanged, onClose: onOverlayClosed,
+                    onReport: () => openHiring('assistant'),
+                });
+            })],
             ['钓鱼', () => openOverlay('Fishing', (n) => {
                 const f = n.addComponent(FishingView);
                 Object.assign(f, { world: WORLD, state, icons: vv, onGold: () => build?.changed(), onClose: onOverlayClosed });
@@ -297,18 +407,18 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore): void {
     current = { orientation, w: W, h: H, teardown: () => canvasNode.destroy() };
 }
 
-/** 屏幕转了或者大小变了就重搭；只差一两个像素的不管。 */
-function checkScreen(scene: Scene, state: GameState, store: SaveStore): void {
+/** 屏幕转了或者大小变了就重搭；只差一两个像素的不管。force 时无论如何重搭（换成了云端存档）。 */
+function checkScreen(scene: Scene, state: GameState, store: SaveStore, sim: Sim, force = false): void {
     if (!current || !scene.isValid) return;
     const win = screen.windowSize;
     const o = orientationOf(win.width, win.height);
     const vis = view.getVisibleSize();
-    if (o === current.orientation && Math.abs(vis.width - current.w) < 2 && Math.abs(vis.height - current.h) < 2) return;
+    if (!force && o === current.orientation && Math.abs(vis.width - current.w) < 2 && Math.abs(vis.height - current.h) < 2) return;
     saveGame(store, state);
     current.teardown();
     current = null;
     // 节点在这一帧末尾才真正销毁，下一帧再搭
-    director.once(Director.EVENT_AFTER_UPDATE, () => buildMain(scene, state, store));
+    director.once(Director.EVENT_AFTER_UPDATE, () => buildMain(scene, state, store, sim));
 }
 
 function onLaunch(scene: Scene): void {
@@ -316,11 +426,19 @@ function onLaunch(scene: Scene): void {
     const store = localStore;
     // 新开局的老家先固定江南；选老家界面做好后在开局时选
     const state = loadOrNew(store, WORLD, 'jiangnan');
-    buildMain(scene, state, store);
+    // 常驻模拟：先把离线这段推进完再搭界面，之后每 10 秒推进一次，不跟着界面走
+    const simNode = new Node('Sim');
+    scene.addChild(simNode);
+    director.addPersistRootNode(simNode);
+    const sim = simNode.addComponent(Sim);
+    Object.assign(sim, { world: WORLD, state, store, cloud: makeCloudSync() });
+    sim.report.value = sim.step();
+    simEvents.on('replaced', () => checkScreen(scene, state, store, sim, true));
+    buildMain(scene, state, store, sim);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onResize = () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => checkScreen(scene, state, store), 150);
+        timer = setTimeout(() => checkScreen(scene, state, store, sim), 150);
     };
     view.on('canvas-resize', onResize);
     // 微信转屏不一定触发画布尺寸事件，直接听转屏

@@ -1,5 +1,6 @@
 // 时间推进：在线时每分钟调一次，回到游戏时调一次做离线结算，两种情况走同一套逻辑。
-// 按 10 分钟一步推进：作物生长、换季、整点让打工镇民干活。
+// 按 10 分钟一步推进：作物生长、换季、整点让打工镇民干活。雇了人时改成按整分钟一步，每分钟推进工人。
+// 每一步都切在绝对时间的整点上（不从 lastTick 起算），所以多久调一次、谁来调（游戏里或云端），结果都一样。
 
 import { World } from './defs';
 import { GameState, Season, Weather } from './types';
@@ -9,6 +10,7 @@ import { WeatherFn, isWetWeather, weatherOn } from './weather';
 import { DRY_SPEED, applySeasonChange, growPlot } from './farm';
 import { HelperLog, emptyHelperLog, runHelpers } from './helpers';
 import { regionOf } from './region';
+import { runWorkers } from './workers';
 
 export const STEP_MS = 10 * MINUTE;
 /** 离开太久只结算最近 14 天，防止一次算太久。 */
@@ -46,7 +48,8 @@ export function simulate(state: GameState, world: World, toMs: number, opts: Sim
     let weather: Weather = 'sunny';
 
     while (t < toMs) {
-        const end = Math.min(t + STEP_MS, toMs);
+        const unit = state.workers.length > 0 || state.errand ? MINUTE : STEP_MS;
+        const end = Math.min(Math.floor(t / unit) * unit + unit, toMs);
 
         const season = seasonAt(t);
         if (season !== state.season) {
@@ -74,6 +77,9 @@ export function simulate(state: GameState, world: World, toMs: number, opts: Sim
         const nextHour = Math.floor(t / HOUR) * HOUR + HOUR;
         if (nextHour <= end) {
             runHelpers(state, world, nextHour, weatherFn(nextHour), report);
+        }
+        if (end % MINUTE === 0 && (state.workers.length > 0 || state.errand)) {
+            runWorkers(state, world, end, weather);
         }
 
         t = end;

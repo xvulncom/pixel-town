@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { newGame } from '../assets/scripts/core/game';
 import {
     DialogueContext, LocalPlanProvider, StateNpcMemory, activityAt, giveGift, pickLine, talk,

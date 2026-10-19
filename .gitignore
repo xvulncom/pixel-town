@@ -21,3 +21,6 @@ Thumbs.db
 # 开发者工具误导入仓库根目录时生成的配置，正确导入目录是 build/wechatgame
 /project.config.json
 /project.private.config.json
+
+# 云函数里打包出来的 core（部署云函数前 npm run build:cloud 生成）
+cloud/functions/workerTick/core.js

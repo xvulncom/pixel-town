@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { newGame } from '../assets/scripts/core/game';
 import { buySeed, plant } from '../assets/scripts/core/farm';
 import { weatherOn } from '../assets/scripts/core/weather';

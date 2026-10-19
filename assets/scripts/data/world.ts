@@ -10,6 +10,7 @@ import { BUILDINGS, TIERS, VILLAGE_STARTER } from './buildings';
 import { VILLAGE_BORDER } from './villageBorder';
 import { FISH } from './fish';
 import { MARKET } from './market';
+import { HIRING, WORKERS } from './workers';
 
 export const WORLD: World = {
     crops: CROPS,
@@ -23,4 +24,6 @@ export const WORLD: World = {
     villageBorder: VILLAGE_BORDER,
     fish: FISH,
     market: MARKET,
+    workers: WORKERS,
+    hiring: HIRING,
 };

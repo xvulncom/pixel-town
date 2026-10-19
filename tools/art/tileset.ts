@@ -10,7 +10,7 @@ import {
     stall, stoneBench, stoneBridge, waterJar, well, willow, woodpile,
 } from './props';
 import {
-    archway, boatReflection, stage, tanghulu, teaTable, wallGate, wallH, wallV, waterSteps, willowReflection,
+    archway, boatReflection, hireBoard, stage, tanghulu, teaTable, wallGate, wallH, wallV, waterSteps, willowReflection,
 } from './town';
 
 export const RIVER_H = 5;
@@ -75,6 +75,7 @@ export const G = {
     ],
     teaTable: sheet.sprite(2, 2, teaTable),
     tanghulu: sheet.sprite(1, 3, tanghulu),
+    hireBoard: sheet.sprite(3, 3, hireBoard),
     laundry: sheet.sprite(3, 2, laundry),
     woodpile: sheet.sprite(2, 1, woodpile),
     bench: sheet.sprite(2, 1, stoneBench),

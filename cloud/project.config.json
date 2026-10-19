@@ -1,0 +1,13 @@
+{
+  "description": "像素小镇云函数工程，只用来部署 functions/ 下的云函数，不是游戏包。",
+  "compileType": "game",
+  "miniprogramRoot": "./",
+  "cloudfunctionRoot": "functions/",
+  "appid": "wx8045e8ca2b039599",
+  "projectname": "pixel-town-cloud",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "minified": false
+  }
+}

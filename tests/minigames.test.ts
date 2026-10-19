@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { deserialize, newGame, SAVE_VERSION, serialize } from '../assets/scripts/core/game';
 import { plotIndexAt, tend } from '../assets/scripts/core/fields';
 import { patrol, patrolSummary } from '../assets/scripts/core/patrol';

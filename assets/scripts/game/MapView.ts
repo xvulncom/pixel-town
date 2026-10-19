@@ -80,6 +80,11 @@ export class MapView extends Component {
         this.moveTo(this.node.position.x, this.node.position.y);
     }
 
+    /** 把地图节点里的点 (lx, ly) 移到屏幕中间（拖不过去的地方停在边上）。 */
+    focus(lx: number, ly: number): void {
+        this.moveTo(-lx * this.zoom, -ly * this.zoom);
+    }
+
     /** 地图比屏幕大时只能拖到边缘（四边各多让出被界面挡住的那段），比屏幕小时居中。 */
     private moveTo(x: number, y: number): void {
         const ui = this.node.getComponent(UITransform);

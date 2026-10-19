@@ -209,3 +209,30 @@ export function boatReflection(p: Pen): void {
         }
     }
 }
+
+/** 招工告示栏，3×3 格：小瓦檐、两根立柱、木板上贴着招工启事和一张红纸。镇上招工处就是它。 */
+export function hireBoard(p: Pen): void {
+    groundShadow(p, 24, 45, 20, 3);
+    for (const x of [6, 40]) {
+        p.R(x, 10, 3, 36, C.woodDark);
+        p.R(x, 10, 1, 36, 0x6e4a30);
+    }
+    p.R(8, 14, 33, 22, C.woodLight);
+    p.R(8, 14, 33, 1, 0xa0683f);
+    p.R(8, 35, 33, 2, C.woodDark);
+    for (let y = 18; y < 35; y += 5) p.R(9, y, 31, 1, 0x6e4329);
+    // 白纸启事，上面几行字
+    const notes: [number, number, number, number][] = [[11, 17, 8, 10], [21, 16, 7, 8], [30, 18, 8, 11], [12, 28, 7, 6]];
+    for (const [x, y, w, h] of notes) {
+        p.R(x, y, w, h, 0xf2ecd8);
+        p.R(x, y + h - 1, w, 1, 0xd5ccb0);
+        for (let ly = y + 2; ly < y + h - 1; ly += 2) p.R(x + 1, ly, w - 2 - ((ly * 3) % 3), 1, 0x8a8478);
+    }
+    // 红纸：招工
+    p.R(21, 25, 8, 9, 0xc8322a);
+    p.R(21, 25, 8, 1, 0xe2574a);
+    p.R(23, 27, 4, 1, 0xf0c24a);
+    p.R(24, 27, 1, 5, 0xf0c24a);
+    p.R(23, 30, 4, 1, 0xf0c24a);
+    tileEave(p, 2, 46, 4, 12);
+}

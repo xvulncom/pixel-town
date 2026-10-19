@@ -11,8 +11,8 @@ import { seedItem } from './inventory';
 import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
-/** 第 2 版：加自己的地盘 village。 */
-export const SAVE_VERSION = 4;
+/** 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工。 */
+export const SAVE_VERSION = 5;
 export const START_GOLD = 300;
 export const STARTER_SEEDS = 5;
 
@@ -52,6 +52,12 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         village: newVillage(world),
         fishLog: {},
         daily: emptyDaily(dayKey(nowMs)),
+        workers: [],
+        farmSeed: starter?.id ?? '',
+        lastSeen: 0,
+        errand: null,
+        hireReport: null,
+        workerLog: [],
     };
     // 开局布局里的每格菜地各配一块地
     syncFieldPlots(state, world);
@@ -80,6 +86,15 @@ export function deserialize(json: string, world: World): GameState {
     // 第 4 版加入图鉴和每日记录
     data.fishLog ??= {};
     data.daily ??= emptyDaily('');
+    // 第 5 版加入雇工
+    data.workers ??= [];
+    data.farmSeed ??= '';
+    data.lastSeen ??= 0;
+    data.errand ??= null;
+    data.hireReport ??= null;
+    data.workerLog ??= [];
+    data.workers = data.workers.filter((w) => world.workers[w.id]);
+    if (data.errand && !data.workers.some((w) => w.id === data.errand!.by)) data.errand = null;
     // 第 1 版没有地盘，读档时送开局布局；以后删掉的建筑在这里清掉
     data.village = data.village ? repairVillage(world, data.village) : newVillage(world);
     if (!world.regions[data.region]) {

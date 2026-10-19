@@ -53,15 +53,5 @@ export const TIERS: Record<Tier, TierDef> = {
     city: { id: 'city', name: '城市', size: [64, 72] },
 };
 
-/** 开局：一户人家、门前土路、水井、一小块菜地、几棵树。 */
-export const VILLAGE_STARTER: StarterItem[] = [
-    { def: 'house', x: 9, y: 12 },
-    ...[14, 15, 16, 17, 18, 19, 20, 21].flatMap((y) => [11, 12].map((x) => ({ def: 'road_dirt', x, y }))),
-    { def: 'well', x: 15, y: 16 },
-    ...[16, 17, 18].flatMap((y) => [4, 5, 6, 7].map((x) => ({ def: 'field', x, y }))),
-    { def: 'tree', x: 4, y: 8 },
-    { def: 'tree_peach', x: 19, y: 9 },
-    { def: 'willow', x: 3, y: 25 },
-    { def: 'bamboo', x: 20, y: 26 },
-    { def: 'jar', x: 8, y: 13 },
-];
+/** 开局只有自己和起始资金（用户 2026-10-19 定），地盘是一块空地，房子菜地都自己盖。要送东西在这里加。 */
+export const VILLAGE_STARTER: StarterItem[] = [];

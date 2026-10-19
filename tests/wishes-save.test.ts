@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD } from '../assets/scripts/data/world';
+import { WORLD } from './world';
 import { deserialize, newGame, serialize } from '../assets/scripts/core/game';
 import { submitWish } from '../assets/scripts/core/wishes';
 import { bj } from './util';

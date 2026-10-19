@@ -165,7 +165,6 @@ export interface BuildingDef {
     terrain?: Terrain;
 }
 
-/** 开局送的布局，不花钱。 */
 /** 自己地盘外面一圈装饰（只画不存档、不能摆东西）。sprite 名对应 buildings.png 里的图，数字是权重。 */
 export interface BorderDef {
     /** 外圈宽几格 */
@@ -180,10 +179,90 @@ export interface BorderDef {
     treeHeight: number;
 }
 
+/** 开局送的布局，不花钱（现在开局是空地，见 data/buildings.ts）。 */
 export interface StarterItem {
     def: string;
     x: number;
     y: number;
+}
+
+export type WorkerRole = 'farmhand' | 'assistant';
+
+/** 求职的人的性子。全部藏着不给玩家看，玩家只能从口碑和干活结果去猜。 */
+export interface WorkerTraits {
+    /** 每小时能干几件活 */
+    skill: number;
+    /** 偷懒的底子，0～1 */
+    laziness: number;
+    /** 收菜时偷吃的倾向，0～1 */
+    greed: number;
+    /** 心气，0～1：越高越受不了压价 */
+    pride: number;
+    /** 助理的眼力，0～1：评价别人准不准 */
+    eye: number;
+}
+
+/** 一个能雇的人。以后雇好友时由后端给出同样形状的数据。 */
+export interface WorkerDef {
+    id: string;
+    name: string;
+    role: WorkerRole;
+    /** 人物图集 people-frames.json 里的行名 */
+    look: string;
+    /** 一句自我介绍，招工处卡片上显示 */
+    intro: string;
+    /** 要的日薪 */
+    ask: number;
+    /** 上工时段 [开始, 结束)，北京时间整点 */
+    workHours: [number, number];
+    traits: WorkerTraits;
+}
+
+/** 一档出价：压价、照价、加价。 */
+export interface WageOffer {
+    id: string;
+    name: string;
+    /** 相对要价的倍数 */
+    rate: number;
+}
+
+/** 口碑分档：感觉到的值不低于 min 就用这句（从高到低排）。 */
+export interface RumorBand {
+    min: number;
+    text: string;
+}
+
+/** 招工、工钱、偷懒的规则参数。 */
+export interface HiringDef {
+    /** 招工处每天来几个人 */
+    dailyCandidates: number;
+    /** 哪些建筑算住处，每处住几个工人 */
+    housing: string[];
+    perHouse: number;
+    offers: WageOffer[];
+    /** 计件时偷懒概率乘的系数 */
+    pieceSlack: number;
+    /** 有人看着时偷懒概率乘的系数 */
+    watchSlack: number;
+    /** 玩家多久之内开过游戏算"有人看着"（毫秒） */
+    watchWindowMs: number;
+    /** 一次偷懒持续几分钟（偷懒按这个长度成段决定） */
+    slackSpellMin: number;
+    /** 连欠几次薪就走人 */
+    maxUnpaid: number;
+    morale: { start: number; paid: number; raise: number; unpaid: number; tooLittle: number; quitBelow: number };
+    /** 计件时一天挣不到要价的这个比例就不高兴 */
+    pieceFairRatio: number;
+    /** 计件单价按一天能干到多少件估：上工小时 × 每小时件数 × 这个比例 */
+    pieceBusyRatio: number;
+    /** 助理去招工处单程来回要几分钟；懒的人再乘 (1 + 懒度 × errandLazy) */
+    errandMinutes: number;
+    errandLazy: number;
+    /** 亲自去看人，口碑的准确度 */
+    inPersonEye: number;
+    rumors: { laziness: RumorBand[]; skill: RumorBand[]; greedy: { min: number; text: string } };
+    /** 工人动态最多留几条 */
+    logLimit: number;
 }
 
 export interface World {
@@ -198,4 +277,6 @@ export interface World {
     villageBorder: BorderDef;
     fish: Record<string, FishDef>;
     market: MarketDef;
+    workers: Record<string, WorkerDef>;
+    hiring: HiringDef;
 }
