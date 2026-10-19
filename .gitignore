@@ -17,3 +17,7 @@ Thumbs.db
 # 凭据不进仓库（AppSecret 等放 ~/密钥/）
 .env
 *.secret.*
+
+# 开发者工具误导入仓库根目录时生成的配置，正确导入目录是 build/wechatgame
+/project.config.json
+/project.private.config.json

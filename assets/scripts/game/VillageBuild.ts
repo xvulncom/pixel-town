@@ -33,6 +33,8 @@ export class VillageBuild extends Component {
     state!: GameState;
     store!: SaveStore;
     view!: VillageView;
+    /** 底部横条的高度，底栏垫高这么多（见 core/screen.ts）。 */
+    bottomPad = 0;
     /** 金币、地盘变了之后通知顶栏。 */
     onChange: (() => void) | null = null;
 
@@ -55,6 +57,12 @@ export class VillageBuild extends Component {
         panel.getComponent(UITransform)!.setContentSize(720, PANEL_H);
         const g = panel.addComponent(Graphics);
         drawBox(g, 720, PANEL_H, new Color(40, 30, 22, 225), 0);
+        // 横条那段也铺上底色，按钮留在横条上面
+        if (this.bottomPad > 0) {
+            g.fillColor = new Color(40, 30, 22, 225);
+            g.rect(-360, -PANEL_H / 2 - this.bottomPad, 720, this.bottomPad);
+            g.fill();
+        }
         // 点在建造栏上的触摸不往下传给地图
         panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
             e.propagationStopped = true;
@@ -95,7 +103,7 @@ export class VillageBuild extends Component {
         mapNode.on(Node.EventType.TOUCH_START, this.onMapStart, this);
         mapNode.on(Node.EventType.TOUCH_END, this.onMapEnd, this);
         const mv = mapNode.getComponent(MapView);
-        if (mv) mv.insetBottom = PANEL_H;
+        if (mv) mv.insetBottom = PANEL_H + this.bottomPad;
 
         this.renderCards();
         this.setMode({ kind: 'idle' });
@@ -134,7 +142,7 @@ export class VillageBuild extends Component {
 
     private stickBottom(): void {
         if (!this.node.isValid) return;
-        this.node.setPosition(0, -view.getVisibleSize().height / 2 + PANEL_H / 2, 0);
+        this.node.setPosition(0, -view.getVisibleSize().height / 2 + this.bottomPad + PANEL_H / 2, 0);
     }
 
     private turn(d: number): void {
@@ -190,7 +198,7 @@ export class VillageBuild extends Component {
     private select(def: BuildingDef): void {
         // 虚影先放在屏幕中间那格
         const vis = view.getVisibleSize();
-        const center = this.view.cellAt(new Vec2(vis.width / 2, (vis.height + PANEL_H) / 2)) ?? [0, 0];
+        const center = this.view.cellAt(new Vec2(vis.width / 2, (vis.height + PANEL_H + this.bottomPad) / 2)) ?? [0, 0];
         const [x, y] = anchorFromCell(def, center[0], center[1]);
         this.setMode({ kind: 'place', def, x, y });
         this.say(def.kind === 'ground' ? `点地面铺${def.name}，可以连着点` : `点地面挪位置，再点「放这里」`);
