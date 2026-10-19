@@ -4,13 +4,15 @@ import { World } from './defs';
 import { GameState } from './types';
 import { seasonAt } from './calendar';
 import { syncFieldPlots } from './fields';
+import { emptyDaily } from './daily';
+import { dayKey } from './time';
 import { inSeason } from './region';
 import { seedItem } from './inventory';
 import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
 /** 第 2 版：加自己的地盘 village。 */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const START_GOLD = 300;
 export const STARTER_SEEDS = 5;
 
@@ -48,6 +50,8 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         wishesDone: [],
         unlocked: [],
         village: newVillage(world),
+        fishLog: {},
+        daily: emptyDaily(dayKey(nowMs)),
     };
     // 开局布局里的每格菜地各配一块地
     syncFieldPlots(state, world);
@@ -73,6 +77,9 @@ export function deserialize(json: string, world: World): GameState {
     data.helpers ??= [];
     data.wishesDone ??= [];
     data.unlocked ??= [];
+    // 第 4 版加入图鉴和每日记录
+    data.fishLog ??= {};
+    data.daily ??= emptyDaily('');
     // 第 1 版没有地盘，读档时送开局布局；以后删掉的建筑在这里清掉
     data.village = data.village ? repairVillage(world, data.village) : newVillage(world);
     if (!world.regions[data.region]) {

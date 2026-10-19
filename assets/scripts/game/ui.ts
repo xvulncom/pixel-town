@@ -43,6 +43,7 @@ export const INK = new Color(255, 248, 225, 255);
 export const PAPER = new Color(58, 44, 32, 230);
 export const ACCENT = new Color(196, 74, 52, 255);
 export const MUTED = new Color(110, 98, 86, 255);
+export const GOLD = new Color(255, 214, 102, 255);
 
 export interface Button {
     node: Node;

@@ -8,7 +8,7 @@ import { Box, ScreenInsets } from '../core/screen';
 interface PtInsets {
     windowWidth: number;
     windowHeight: number;
-    safeArea: { top: number; bottom: number };
+    safeArea: { top: number; bottom: number; left?: number; right?: number };
     capsule?: Box | null;
 }
 
@@ -46,6 +46,8 @@ export function screenInsets(): ScreenInsets {
             height: vis.height,
             safeTop: Math.max(0, pt.safeArea.top * k),
             safeBottom: Math.max(0, (pt.windowHeight - pt.safeArea.bottom) * k),
+            safeLeft: Math.max(0, (pt.safeArea.left ?? 0) * k),
+            safeRight: Math.max(0, (pt.windowWidth - (pt.safeArea.right ?? pt.windowWidth)) * k),
             // 有的机型胶囊接口返回全 0，当没有
             capsule: c && c.right > 0 ? { left: c.left * k, top: c.top * k, right: c.right * k, bottom: c.bottom * k } : null,
         };
@@ -57,6 +59,24 @@ export function screenInsets(): ScreenInsets {
         height: vis.height,
         safeTop: Math.max(0, vis.height - (r.y + r.height)),
         safeBottom: Math.max(0, r.y),
+        safeLeft: Math.max(0, r.x),
+        safeRight: Math.max(0, vis.width - (r.x + r.width)),
         capsule: null,
     };
+}
+
+/** 微信里能不能切横竖屏（要基础库有 wx.setDeviceOrientation），网页上靠转手机或拉窗口。 */
+export function canRotate(): boolean {
+    const wx = (globalThis as any).wx;
+    return !!wx?.setDeviceOrientation;
+}
+
+export function rotateTo(value: 'portrait' | 'landscape', done: () => void): void {
+    const wx = (globalThis as any).wx;
+    try {
+        wx.setDeviceOrientation({ value, complete: done });
+    } catch (e) {
+        console.warn('切横竖屏失败', e);
+        done();
+    }
 }

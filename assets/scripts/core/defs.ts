@@ -16,6 +16,41 @@ export interface CropDef {
     specialty?: boolean;
 }
 
+export interface FishDef {
+    id: string;
+    name: string;
+    /** 哪些季节有，空数组表示四季都有。 */
+    seasons: Season[];
+    /** 北京时间整点 [开始, 结束)，可以跨夜（如 [19, 5]）；不填全天都有。 */
+    hours?: [number, number];
+    /** 只在这些天气出来；不填不挑天气。 */
+    weather?: Weather[];
+    /** 只在这些地域有；不填各地都有。 */
+    regions?: string[];
+    /** 1～5，越大鱼跑得越快、提竿窗口越短。 */
+    difficulty: number;
+    price: number;
+    /** 出现权重，越小越稀有。 */
+    weight: number;
+}
+
+/** 集市摆摊的规则参数。 */
+export interface MarketDef {
+    /** 一轮多少秒 */
+    roundSec: number;
+    /** 每天前几轮给钱 */
+    roundsPerDay: number;
+    /** 一单按收购价的多少算 */
+    priceRate: number;
+    /** 每连对一单多加的比例，和上限 */
+    streakStep: number;
+    streakMax: number;
+    /** 顾客耐心（秒）：第一个 start，之后每个少 step，最少 min */
+    patience: { start: number; step: number; min: number };
+    /** 摊上摆几样货 */
+    goods: number;
+}
+
 export interface PlanEntry {
     /** 北京时间整点。 */
     hour: number;
@@ -161,4 +196,6 @@ export interface World {
     tiers: Record<Tier, TierDef>;
     villageStarter: StarterItem[];
     villageBorder: BorderDef;
+    fish: Record<string, FishDef>;
+    market: MarketDef;
 }

@@ -15,9 +15,11 @@ function clamp(v: number, lo: number, hi: number): number {
 
 @ccclass('MapView')
 export class MapView extends Component {
-    /** 屏幕上下被界面挡住的高度（设计分辨率像素），地图能多拖一点，边上的格子不会藏在界面底下。 */
+    /** 屏幕四边被界面挡住的宽度（设计分辨率像素），地图能多拖一点，边上的格子不会藏在界面底下。 */
     insetTop = 0;
     insetBottom = 0;
+    insetLeft = 0;
+    insetRight = 0;
     private zoom = DEFAULT_SCALE;
     private pinchDist = 0;
 
@@ -78,7 +80,7 @@ export class MapView extends Component {
         this.moveTo(this.node.position.x, this.node.position.y);
     }
 
-    /** 地图比屏幕大时只能拖到边缘（上下各多让出被界面挡住的那段），比屏幕小时居中。 */
+    /** 地图比屏幕大时只能拖到边缘（四边各多让出被界面挡住的那段），比屏幕小时居中。 */
     private moveTo(x: number, y: number): void {
         const ui = this.node.getComponent(UITransform);
         if (!ui) {
@@ -87,6 +89,6 @@ export class MapView extends Component {
         const vis = view.getVisibleSize();
         const maxX = Math.max(0, (ui.width * this.zoom - vis.width) / 2);
         const maxY = Math.max(0, (ui.height * this.zoom - vis.height) / 2);
-        this.node.setPosition(clamp(x, -maxX, maxX), clamp(y, -maxY - this.insetTop, maxY + this.insetBottom), 0);
+        this.node.setPosition(clamp(x, -maxX - this.insetRight, maxX + this.insetLeft), clamp(y, -maxY - this.insetTop, maxY + this.insetBottom), 0);
     }
 }

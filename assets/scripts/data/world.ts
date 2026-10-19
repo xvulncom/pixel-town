@@ -8,6 +8,8 @@ import { WISHES } from './wishes';
 import { DIALOGUES } from './dialogues';
 import { BUILDINGS, TIERS, VILLAGE_STARTER } from './buildings';
 import { VILLAGE_BORDER } from './villageBorder';
+import { FISH } from './fish';
+import { MARKET } from './market';
 
 export const WORLD: World = {
     crops: CROPS,
@@ -19,4 +21,6 @@ export const WORLD: World = {
     tiers: TIERS,
     villageStarter: VILLAGE_STARTER,
     villageBorder: VILLAGE_BORDER,
+    fish: FISH,
+    market: MARKET,
 };

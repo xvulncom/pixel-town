@@ -10,6 +10,7 @@ import {
 import { flowerPatch, tallGrass } from './terrain';
 import { archway, stage, teaTable } from './town';
 import { LOOKS, cropRipeArt, cropStageArt } from './crops';
+import { FISH_LOOKS, fishArt, fishSize } from './fish';
 
 interface ObjectArt {
     /** 图的大小（格） */
@@ -58,6 +59,8 @@ export const OBJECTS: Record<string, ObjectArt> = {
     crop_young: { w: 1, h: 2, paint: (p) => cropStageArt(p, 'young') },
     crop_withered: { w: 1, h: 2, paint: (p) => cropStageArt(p, 'withered') },
     ...Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [`crop_${id}`, { w: 1, h: 2, paint: (p: Pen) => cropRipeArt(p, look) }])),
+    // 鱼（见 fish.ts），钓鱼和摆摊界面用
+    ...Object.fromEntries(Object.entries(FISH_LOOKS).map(([id, look]) => [`fish_${id}`, { w: fishSize(look)[0], h: fishSize(look)[1], paint: (p: Pen) => fishArt(p, look) }])),
 };
 
 /** 按高度排成几行拼进一张图，返回图和每张的 [x, y, w, h]（像素）。 */

@@ -57,6 +57,19 @@ export interface GameState {
     unlocked: string[];
     /** 自己的地盘，存档第 2 版加入。 */
     village: VillageState;
+    /** 鱼类图鉴：每种鱼钓上来几条，存档第 4 版加入。 */
+    fishLog: Record<string, number>;
+    /** 每天重置的记录，存档第 4 版加入。 */
+    daily: DailyState;
+}
+
+/** 按北京时间切日，换了一天就清零（见 core/daily.ts）。 */
+export interface DailyState {
+    day: string;
+    /** 今天钓上过鱼没有（第一条翻倍） */
+    fished: boolean;
+    /** 今天摆了几轮摊 */
+    marketRounds: number;
 }
 
 /** 自己地盘上摆的一件东西。x、y 是占地左上角的格子。 */
