@@ -7,7 +7,7 @@ import { World } from '../core/defs';
 import { deserialize } from '../core/game';
 import { OfflineReport, simulate } from '../core/simulate';
 import { GameState } from '../core/types';
-import { CloudSync } from './CloudStore';
+import { CloudSync } from '../core/sync';
 import { saveGame, SaveStore } from './Store';
 
 const { ccclass } = _decorator;
@@ -53,6 +53,8 @@ export class Sim extends Component {
     private onHide(): void {
         this.step();
         this.shown = false;
+        // 切到后台、关页面：马上推一次，后端从这一刻接着推进工人
+        if (!this.pulling) this.cloud?.flush?.(this.state);
     }
 
     private onShow(): void {
@@ -73,6 +75,8 @@ export class Sim extends Component {
                 saveGame(this.store, this.state);
                 simEvents.emit('replaced');
             }
+        } catch (e) {
+            console.warn('拉后端存档失败', e);
         } finally {
             this.pulling = false;
         }

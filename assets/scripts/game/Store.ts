@@ -1,4 +1,5 @@
-// 存档放哪：现在是本机存储（网页和微信都能用 sys.localStorage）。接后端时实现同一个接口换掉，游戏逻辑不用改。
+// 存档放哪：本机存储（网页和微信都能用 sys.localStorage），是主缓存，读写同步。
+// 后端那份（自建服务器或云开发）是异步同步的，见 core/sync.ts 的 CloudSync 和 game/Backend.ts。
 
 import { sys } from 'cc';
 import { World } from '../core/defs';
@@ -14,11 +15,17 @@ export interface SaveStore {
 
 const KEY = 'pixel-town-save';
 
-export const localStore: SaveStore = {
-    load: () => sys.localStorage.getItem(KEY),
-    save: (json) => sys.localStorage.setItem(KEY, json),
-    backup: (json) => sys.localStorage.setItem(`${KEY}-broken-${Date.now()}`, json),
-};
+/** 本机存储里的一份存档。网页版连服务器时按玩家分开放（同一个浏览器换邀请码不串档）。 */
+export function localStoreAt(key: string): SaveStore {
+    return {
+        load: () => sys.localStorage.getItem(key),
+        save: (json) => sys.localStorage.setItem(key, json),
+        backup: (json) => sys.localStorage.setItem(`${key}-broken-${Date.now()}`, json),
+    };
+}
+
+export const localStore: SaveStore = localStoreAt(KEY);
+export const playerStore = (playerId: string): SaveStore => localStoreAt(`${KEY}-${playerId}`);
 
 /** 读档，没有或读坏了就新开一局。regionId 是新开时用的老家。 */
 export function loadOrNew(store: SaveStore, world: World, regionId: string): GameState {

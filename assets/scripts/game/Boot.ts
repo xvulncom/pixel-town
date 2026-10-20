@@ -21,9 +21,10 @@ import { HiringView } from './HiringView';
 import { WorkersView } from './WorkersView';
 import { VillageWorkers } from './VillageWorkers';
 import { Sim, simEvents } from './Sim';
-import { makeCloudSync } from './CloudStore';
+import { prepareBackend } from './Backend';
+import { CloudSync } from '../core/sync';
 import { HireVia } from '../core/workers';
-import { loadOrNew, localStore, saveGame, SaveStore } from './Store';
+import { loadOrNew, saveGame, SaveStore } from './Store';
 import { button, GOLD, INK, label, UI_LAYER, uiNode } from './ui';
 import { canRotate, rotateTo, screenInsets } from './SafeArea';
 import { HudLayout, Orientation, orientationOf, Rect, screenLayout, ScreenLayout } from '../core/screen';
@@ -421,9 +422,19 @@ function checkScreen(scene: Scene, state: GameState, store: SaveStore, sim: Sim,
     director.once(Director.EVENT_AFTER_UPDATE, () => buildMain(scene, state, store, sim));
 }
 
+let launching = false;
+
 function onLaunch(scene: Scene): void {
-    if (scene.name !== 'main' || scene.getChildByName('Canvas')) return;
-    const store = localStore;
+    if (scene.name !== 'main' || scene.getChildByName('Canvas') || launching) return;
+    launching = true;
+    // 先定存档放哪（网页版可能要先输邀请码、拉服务器存档），再开局
+    void prepareBackend().then(({ store, cloud }) => {
+        launching = false;
+        if (scene.isValid) start(scene, store, cloud);
+    });
+}
+
+function start(scene: Scene, store: SaveStore, cloud: CloudSync | null): void {
     // 新开局的老家先固定江南；选老家界面做好后在开局时选
     const state = loadOrNew(store, WORLD, 'jiangnan');
     // 常驻模拟：先把离线这段推进完再搭界面，之后每 10 秒推进一次，不跟着界面走
@@ -431,7 +442,7 @@ function onLaunch(scene: Scene): void {
     scene.addChild(simNode);
     director.addPersistRootNode(simNode);
     const sim = simNode.addComponent(Sim);
-    Object.assign(sim, { world: WORLD, state, store, cloud: makeCloudSync() });
+    Object.assign(sim, { world: WORLD, state, store, cloud });
     sim.report.value = sim.step();
     simEvents.on('replaced', () => checkScreen(scene, state, store, sim, true));
     buildMain(scene, state, store, sim);
