@@ -5,6 +5,11 @@ import { Pen, TILE, texture } from './canvas';
 import { C } from './palette';
 import { Sheet } from './sheet';
 import { dirtPaint, flowerPatch, grassFill, grassTile, SHINES, soilPaint, stonePaint, tallGrass, terrainTile, waterPaint } from './terrain';
+import { gravelPaint } from './farm';
+import {
+    cargoBoat, cliffFace, cliffSide, cliffStairs, cliffTop, crate, incenseBurner, lotus, pagoda, pavilion, plankTile, reeds,
+    riceSack, stoneLamp, teaBush, templeHall, waterWheel, wineJar,
+} from './scenery';
 import {
     bamboo, boat, bush, crop, fence, house, lanternPost, laundry, lilyPad, pineTree, pottedPlant, rocks, roundTree,
     stall, stoneBench, stoneBridge, waterJar, well, willow, woodpile,
@@ -35,6 +40,7 @@ export const G = {
     water: terrain16((m) => (p) => terrainTile(p, m, 0, 0, waterPaint(0))),
     soil: terrain16((m) => (p) => terrainTile(p, m, 1, 0, soilPaint(p.r))),
     stone: terrain16((m) => (p) => terrainTile(p, m, 0, 0, stonePaint(p.r))),
+    gravel: terrain16((m) => (p) => terrainTile(p, m, 0, 1, gravelPaint(p.r))),
     // 大片石板多几种切法，随机混铺
     stoneFill: Array.from({ length: 5 }, () => sheet.add((p) => terrainTile(p, 15, 0, 0, stonePaint(p.r)))),
     // 开阔水面：每组 4 帧，第 0 帧摆在地图上；第 0 组的第 0 帧就是 water[15]
@@ -107,6 +113,35 @@ export const G = {
     sprout: sheet.sprite(1, 2, (p) => crop(p, 'sprout')),
     cabbage: sheet.sprite(1, 2, (p) => crop(p, 'cabbage')),
     rice: sheet.sprite(1, 2, (p) => crop(p, 'rice')),
+
+    // ---------- 镇外风景（scenery.ts）：茶山、码头集市、荷花湖、竹林古寺、稻田 ----------
+    /** 崖壁：[行][收口]，行 0 顶 1 中 2 底 3 只有一行；收口 0 左 1 中 2 右 */
+    cliff: (['top', 'mid', 'bot', 'one'] as const).map((row) =>
+        (['l', 'm', 'r'] as const).map((end) => sheet.add((p) => cliffFace(p, row, end)))),
+    /** 崖壁上的石阶，行同上 */
+    cliffStairs: (['top', 'mid', 'bot', 'one'] as const).map((row) => sheet.add((p) => cliffStairs(p, row))),
+    cliffSideL: sheet.add((p) => cliffSide(p, 'l')),
+    cliffSideR: sheet.add((p) => cliffSide(p, 'r')),
+    cliffTop: sheet.add(cliffTop),
+    teaBushes: [0, 1].map(() => sheet.add(teaBush)),
+    /** 水上的木板（码头）和石板（九曲桥），按四邻选 */
+    planks: terrain16((m) => (p) => plankTile(p, m, 'wood', waterPaint(0))),
+    slabs: terrain16((m) => (p) => plankTile(p, m, 'slab', waterPaint(0))),
+    cargoBoat: sheet.sprite(6, 3, cargoBoat),
+    crate: sheet.add(crate),
+    wineJar: sheet.add(wineJar),
+    riceSack: sheet.add(riceSack),
+    pavilion: sheet.sprite(4, 5, pavilion),
+    temple: sheet.sprite(8, 6, templeHall),
+    pagoda: sheet.sprite(4, 9, pagoda),
+    incense: sheet.sprite(2, 2, incenseBurner),
+    waterWheel: sheet.sprite(3, 4, waterWheel),
+    lotus: sheet.add(lotus),
+    reeds: sheet.add(reeds),
+    stoneLamp: sheet.sprite(1, 2, stoneLamp),
+    teahouse: sheet.sprite(7, 6, (p) => house(p, 7, 6, { sign: 'tea', floors: 2, gable: true })),
+    clothShop: sheet.sprite(6, 5, (p) => house(p, 6, 5, { sign: 'cloth' })),
+    riceShop: sheet.sprite(6, 5, (p) => house(p, 6, 5, { sign: 'rice', gable: true })),
 };
 
 G.waterAnims = SHINES.map((_, v) => {

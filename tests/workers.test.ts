@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { WORLD as FARM } from './world';
 import { WORLD as REAL } from '../assets/scripts/data/world';
 import { World } from '../assets/scripts/core/defs';
-import { deserialize, newGame, serialize, START_GOLD } from '../assets/scripts/core/game';
+import { deserialize, SAVE_VERSION, newGame, serialize, START_GOLD } from '../assets/scripts/core/game';
 import { simulate } from '../assets/scripts/core/simulate';
 import { DAY, HOUR, MINUTE } from '../assets/scripts/core/time';
 import { GameState } from '../assets/scripts/core/types';
@@ -200,7 +200,7 @@ test('存档：第 4 版读进来补上雇工字段，工人和跑腿都存得�
     for (const k of ['workers', 'farmSeed', 'lastSeen', 'errand', 'hireReport', 'workerLog']) delete old[k];
     old.version = 4;
     const v4 = deserialize(JSON.stringify(old), WORLD);
-    assert.equal(v4.version, 5);
+    assert.equal(v4.version, SAVE_VERSION);
     assert.deepEqual(v4.workers, []);
     assert.equal(v4.errand, null);
 });

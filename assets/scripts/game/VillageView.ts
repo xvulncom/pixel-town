@@ -7,9 +7,9 @@ import {
     Texture2D, tween, UIOpacity, UITransform, Vec2, Vec3, view,
 } from 'cc';
 import { World } from '../core/defs';
-import { grassVariant, terrainGrid, terrainMask, villageSize } from '../core/village';
+import { activeWild, grassVariant, terrainGrid, villageSize } from '../core/village';
 import { cropSprite, cropStage } from '../core/fields';
-import { borderDecor, Decor } from '../core/border';
+import { borderDecor, borderGround, Decor, sceneMask } from '../core/border';
 import { GameState, VillageState } from '../core/types';
 import { uiNode } from './ui';
 
@@ -18,7 +18,7 @@ const TILE = 16;
 const COLS = 16;
 
 type Frames = Record<string, [number, number, number, number]>;
-type TerrainTiles = Record<'grass' | 'dirt' | 'stone' | 'soil' | 'stoneFill', number[]>;
+type TerrainTiles = Record<'grass' | 'dirt' | 'stone' | 'soil' | 'stoneFill' | 'gravel' | 'water' | 'wood', number[]>;
 
 const OK_COLOR = new Color(120, 230, 120, 255);
 const BAD_COLOR = new Color(240, 90, 80, 255);
@@ -46,6 +46,8 @@ export class VillageView extends Component {
     private ghostSprite: Sprite | null = null;
     private ghostBox: Graphics | null = null;
     private cells: Sprite[] = [];
+    /** 外圈铺了远景地面（小河、稻田）的格子，地盘里的溪水变了要跟着重选边缘 */
+    private borderCells: { x: number; y: number; s: Sprite }[] = [];
     private size: [number, number] = [0, 0];
     private margin = 0;
     private decor: Decor[] = [];
@@ -107,13 +109,18 @@ export class VillageView extends Component {
         const [w, h] = villageSize(this.world, this.village);
         if (w !== this.size[0] || h !== this.size[1]) this.resize(w, h);
         const grid = terrainGrid(this.world, this.village);
+        const border = this.world.villageBorder;
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
                 const t = grid[y * w + x];
-                const id = t ? this.terrain[t][terrainMask(grid, w, h, x, y)] : this.terrain.grass[grassVariant(x, y)];
+                const id = t ? this.terrain[t][sceneMask(border, grid, w, h, x, y)] : this.terrain.grass[grassVariant(x, y)];
                 this.cell(x, y).spriteFrame = this.tileFrame(id);
                 this.cell(x, y).color = Color.WHITE;
             }
+        }
+        for (const { x, y, s } of this.borderCells) {
+            const t = borderGround(border, w, h, x, y)!;
+            s.spriteFrame = this.tileFrame(this.terrain[t][sceneMask(border, grid, w, h, x, y)]);
         }
         // 浇过水的菜地颜色深一点
         const now = Date.now();
@@ -136,6 +143,10 @@ export class VillageView extends Component {
             const stage = p && cropStage(this.world, p);
             const sprite = stage && p.cropId ? cropSprite(p.cropId, stage) : null;
             if (sprite && this.frames[sprite]) items.push({ name: `crop#${it.uid}`, x: it.x, y: it.y, foot: [1, 1], sprite });
+        }
+        // 没开荒的大石头、老树、竹丛
+        for (const d of activeWild(this.world, this.village)) {
+            if (d.sprite && this.frames[d.sprite]) items.push({ name: `wild#${d.id}`, x: d.x, y: d.y, foot: [d.w, d.h], sprite: d.sprite });
         }
         for (const d of this.decor) {
             if (this.frames[d.sprite]) items.push({ name: 'decor', x: d.x, y: d.y, foot: [1, 1], sprite: d.sprite });
@@ -164,6 +175,7 @@ export class VillageView extends Component {
         this.node.getComponent(UITransform)!.setContentSize((w + 2 * m) * TILE, (h + 2 * m) * TILE);
         this.groundLayer!.removeAllChildren();
         this.cells = [];
+        this.borderCells = [];
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
                 const n = uiNode('c', this.groundLayer!, TILE, TILE);
@@ -175,7 +187,7 @@ export class VillageView extends Component {
                 this.cells.push(s);
             }
         }
-        // 外圈草地只铺一次，升档变大时随地盘重建
+        // 外圈只铺一次，升档变大时随地盘重建；远景地面的图块在 refresh 里按四邻选
         for (let y = -m; y < h + m; y++) {
             for (let x = -m; x < w + m; x++) {
                 if (x >= 0 && y >= 0 && x < w && y < h) continue;
@@ -187,6 +199,7 @@ export class VillageView extends Component {
                 s.sizeMode = Sprite.SizeMode.CUSTOM;
                 s.spriteFrame = this.tileFrame(this.terrain!.grass[grassVariant(x, y)]);
                 s.color = BORDER_COLOR;
+                if (borderGround(border, w, h, x, y)) this.borderCells.push({ x, y, s });
             }
         }
     }

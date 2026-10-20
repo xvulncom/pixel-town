@@ -9,6 +9,8 @@ import {
 } from './props';
 import { flowerPatch, tallGrass } from './terrain';
 import { archway, stage, teaTable } from './town';
+import { pavilion, stoneLamp } from './scenery';
+import { beehive, boulder, coop, duckShed, flowerbed, grapeTrellis, haystack, oldTree, scarecrow, shrine, threshing } from './farm';
 import { LOOKS, cropRipeArt, cropStageArt } from './crops';
 import { FISH_LOOKS, fishArt, fishSize } from './fish';
 
@@ -47,6 +49,22 @@ export const OBJECTS: Record<string, ObjectArt> = {
     pine: { w: 3, h: 5, paint: pineTree },
     bamboo: { w: 3, h: 5, paint: bamboo },
     willow: { w: 3, h: 5, paint: willow },
+    // 农家物件和村里的公共去处（farm.ts、scenery.ts）
+    flowerbed: { w: 1, h: 1, paint: flowerbed },
+    stone_lamp: { w: 1, h: 2, paint: stoneLamp },
+    beehive: { w: 1, h: 2, paint: beehive },
+    scarecrow: { w: 1, h: 2, paint: scarecrow },
+    haystack: { w: 2, h: 2, paint: haystack },
+    coop: { w: 3, h: 3, paint: coop },
+    duck_shed: { w: 3, h: 3, paint: duckShed },
+    grape_trellis: { w: 3, h: 3, paint: grapeTrellis },
+    threshing: { w: 4, h: 3, paint: threshing },
+    shrine: { w: 3, h: 4, paint: shrine },
+    pavilion: { w: 4, h: 5, paint: pavilion },
+    // 地盘里开荒前的天然地貌（见 data/villageWild.ts）
+    wild_boulder: { w: 2, h: 2, paint: boulder },
+    wild_old_tree: { w: 5, h: 6, paint: oldTree },
+    wild_bamboo: { w: 3, h: 5, paint: bamboo },
     // 地盘外圈的杂草、灌木（见 data/villageBorder.ts）；三种杂草画法一样，随机数不同长得不一样
     weeds_1: { w: 1, h: 1, paint: tallGrass },
     weeds_2: { w: 1, h: 1, paint: tallGrass },

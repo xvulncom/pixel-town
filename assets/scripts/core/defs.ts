@@ -143,8 +143,26 @@ export interface TierDef {
     size: [number, number];
 }
 
-/** 路面种类，渲染层按它挑地面图块。土路和石板路算连通。 */
-export type Terrain = 'dirt' | 'stone' | 'soil';
+/** 路面种类，渲染层按它挑地面图块。土路、石板路、碎石路算连通；water 是水面，wood 是水上的木桥。 */
+export type Terrain = 'dirt' | 'stone' | 'soil' | 'gravel' | 'water' | 'wood';
+
+/**
+ * 地盘里自带的天然地貌（小溪、池塘、大石头、老树、竹丛）。按坐标写死，地盘大到能装下它才出现；
+ * 花 price 开荒清掉之后才能在那块地上盖东西。水面用 terrain 画，其余用 sprite（图底边居中对齐占地）。
+ */
+export interface WildDef {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    price: number;
+    terrain?: 'water';
+    sprite?: string;
+}
+
+export type Side = 'top' | 'bottom' | 'left' | 'right';
 
 /**
  * 能摆在自己地盘上的东西。
@@ -163,6 +181,8 @@ export interface BuildingDef {
     sprite?: string;
     /** ground 用：铺成哪种路面。 */
     terrain?: Terrain;
+    /** 只能铺在没开荒的水面上（木桥） */
+    onWater?: boolean;
 }
 
 /** 自己地盘外面一圈装饰（只画不存档、不能摆东西）。sprite 名对应 buildings.png 里的图，数字是权重。 */
@@ -177,6 +197,13 @@ export interface BorderDef {
     scatter: { sprites: [string, number][]; density: number };
     /** 树图的高（格）：地盘下方的树要离开这么远，免得挡住地盘里的东西 */
     treeHeight: number;
+    /**
+     * 远景地面：side 那一边离地盘 from～to 格的一带铺成 terrain（小河、稻田）；ridge 是每隔几格留一道土埂；
+     * along 给了就只铺沿边的这几列/行（地盘里的小溪从这里流进流出）。
+     */
+    ground?: { side: Side; from: number; to: number; terrain: Terrain; ridge?: number; along?: [number, number] }[];
+    /** 某一边的树换成别的（竹林、山坡松林），不写的边用 trees.sprites */
+    sideTrees?: Partial<Record<Side, [string, number][]>>;
 }
 
 /** 开局送的布局，不花钱（现在开局是空地，见 data/buildings.ts）。 */
@@ -275,6 +302,7 @@ export interface World {
     tiers: Record<Tier, TierDef>;
     villageStarter: StarterItem[];
     villageBorder: BorderDef;
+    villageWild: WildDef[];
     fish: Record<string, FishDef>;
     market: MarketDef;
     workers: Record<string, WorkerDef>;

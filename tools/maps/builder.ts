@@ -5,7 +5,8 @@ import { mulberry32 } from '../../assets/scripts/core/rng';
 import { G } from '../art/tileset';
 import { E, N, S, W_ } from '../art/terrain';
 
-export enum Terr { Grass, Dirt, Water, Soil, Stone }
+/** Wood 木码头、Slab 石板桥：铺在水上，底下画水。 */
+export enum Terr { Grass, Dirt, Water, Soil, Stone, Wood, Slab }
 
 /** 地图上会走动的人：row 是人物图里的行号，path 是脚下所在格子的路线（来回走）。 */
 export interface Walker {
@@ -36,11 +37,16 @@ export interface MapData {
 }
 
 const isRoad = (t: Terr) => t === Terr.Dirt || t === Terr.Stone;
+const onWater = (t: Terr) => t === Terr.Wood || t === Terr.Slab;
 
 export class MapBuilder {
     readonly terr: Terr[];
     readonly deco: number[];
     readonly over: number[];
+    /** 地面高度：0 是平地，茶山一层层往上。高处往南落下的那面画崖壁，见 cliffs() */
+    readonly level: number[];
+    /** 直接指定地面图块的格子（崖壁上的石阶），finish 时优先用 */
+    readonly groundAt = new Map<number, number>();
     readonly bridge = new Set<number>();
     readonly walkers: Walker[] = [];
     readonly places: Place[] = [];
@@ -50,7 +56,61 @@ export class MapBuilder {
         this.terr = new Array<Terr>(w * h).fill(Terr.Grass);
         this.deco = new Array<number>(w * h).fill(EMPTY);
         this.over = new Array<number>(w * h).fill(EMPTY);
+        this.level = new Array<number>(w * h).fill(0);
         this.rnd = mulberry32(seed);
+    }
+
+    levelAt(x: number, y: number): number {
+        return this.inMap(x, y) ? this.level[this.at(x, y)] : 0;
+    }
+
+    /** 把一块地抬到 lv 层（只会抬高，不会压低） */
+    raise(x0: number, y0: number, w: number, h: number, lv: number): void {
+        for (let y = y0; y < y0 + h; y++) {
+            for (let x = x0; x < x0 + w; x++) if (this.inMap(x, y)) this.level[this.at(x, y)] = Math.max(this.level[this.at(x, y)], lv);
+        }
+    }
+
+    /**
+     * 画崖壁：高处往南落到低处时，在低处顶上几行画岩壁（rows 给每一落差几行，默认落到平地 2 行、梯田之间 1 行）；
+     * 路穿过的地方画石阶（走得过去）。高地左右两侧画竖的崖沿，北沿压一道细线。要在铺完路之后、摆东西之前调。
+     */
+    cliffs(rows: (high: number, low: number) => number = (_h, low) => (low === 0 ? 2 : 1)): void {
+        const face = new Map<number, { row: number; of: number }>();
+        for (let y = 1; y < this.h; y++) {
+            for (let x = 0; x < this.w; x++) {
+                const hi = this.levelAt(x, y - 1);
+                const lo = this.levelAt(x, y);
+                if (hi <= lo) continue;
+                const n = rows(hi, lo);
+                for (let k = 0; k < n && y + k < this.h; k++) face.set(this.at(x, y + k), { row: k, of: n });
+            }
+        }
+        const isFace = (x: number, y: number) => this.inMap(x, y) && face.has(this.at(x, y));
+        for (const [i, f] of face) {
+            const x = i % this.w;
+            const y = Math.floor(i / this.w);
+            const row = f.of === 1 ? 3 : f.row === 0 ? 0 : f.row === f.of - 1 ? 2 : 1;
+            this.over[i] = EMPTY;
+            if (isRoad(this.terr[i])) {
+                this.groundAt.set(i, G.cliffStairs[row]);
+                this.deco[i] = EMPTY;
+                continue;
+            }
+            const l = isFace(x - 1, y);
+            const r = isFace(x + 1, y);
+            this.deco[i] = G.cliff[row][!l ? 0 : !r ? 2 : 1];
+        }
+        for (let y = 0; y < this.h; y++) {
+            for (let x = 0; x < this.w; x++) {
+                const i = this.at(x, y);
+                const L = this.level[i];
+                if (L === 0 || face.has(i) || !this.free(x, y) || this.terr[i] !== Terr.Grass) continue;
+                if (x > 0 && this.levelAt(x - 1, y) < L) this.deco[i] = G.cliffSideL;
+                else if (x < this.w - 1 && this.levelAt(x + 1, y) < L) this.deco[i] = G.cliffSideR;
+                else if (y > 0 && this.levelAt(x, y - 1) < L && !isFace(x, y - 1)) this.deco[i] = G.cliffTop;
+            }
+        }
     }
 
     at(x: number, y: number): number {
@@ -181,12 +241,17 @@ export class MapBuilder {
             const u = this.terr[i];
             // 桥既连着路也连着河
             if (this.bridge.has(i)) return isRoad(t) || t === Terr.Water;
+            // 码头、石板桥底下是水；木板自己只在临水那边收边
+            if (t === Terr.Water) return u === t || onWater(u);
+            if (onWater(t)) return u === t || u !== Terr.Water;
             return u === t || (isRoad(t) && isRoad(u));
         };
         const lushSame = (x: number, y: number) => !this.inMap(x, y) || this.terr[this.at(x, y)] !== Terr.Grass || lush(x, y);
         const ground = this.terr.map((t, i) => {
             const x = i % this.w;
             const y = Math.floor(i / this.w);
+            const fixed = this.groundAt.get(i);
+            if (fixed !== undefined) return fixed;
             if (t === Terr.Grass) {
                 if (!lush(x, y)) return pick(rnd, G.grass, [0.6, 0.22, 0.12, 0.06]);
                 const m = (lushSame(x, y - 1) ? N : 0) | (lushSame(x + 1, y) ? E : 0) | (lushSame(x, y + 1) ? S : 0) | (lushSame(x - 1, y) ? W_ : 0);
@@ -195,7 +260,10 @@ export class MapBuilder {
             const mask = (same(x, y - 1, t) ? N : 0) | (same(x + 1, y, t) ? E : 0) | (same(x, y + 1, t) ? S : 0) | (same(x - 1, y, t) ? W_ : 0);
             if (t === Terr.Water && mask === 15) return pick(rnd, G.waterAnims, [0.4, 0.3, 0.3])[0];
             if (t === Terr.Stone && mask === 15) return G.stoneFill[Math.floor(rnd() * G.stoneFill.length)];
-            const set = { [Terr.Dirt]: G.dirt, [Terr.Water]: G.water, [Terr.Soil]: G.soil, [Terr.Stone]: G.stone }[t];
+            const set = {
+                [Terr.Dirt]: G.dirt, [Terr.Water]: G.water, [Terr.Soil]: G.soil, [Terr.Stone]: G.stone,
+                [Terr.Wood]: G.planks, [Terr.Slab]: G.slabs,
+            }[t];
             return set[mask];
         });
         return { w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places };

@@ -10,7 +10,7 @@ import {
     HorizontalTextAlignment, profiler, resources, Scene, screen, Texture2D, TiledMap, TiledMapAsset, UITransform, Vec2, Vec3,
     view,
 } from 'cc';
-import { MapView } from './MapView';
+import { MapView, TILED_MAX_CELLS } from './MapView';
 import { People } from './People';
 import { DayLight } from './DayLight';
 import { VillageView } from './VillageView';
@@ -29,6 +29,7 @@ import { button, GOLD, INK, label, UI_LAYER, uiNode } from './ui';
 import { canRotate, rotateTo, screenInsets } from './SafeArea';
 import { HudLayout, Orientation, orientationOf, Rect, screenLayout, ScreenLayout } from '../core/screen';
 import { WORLD } from '../data/world';
+import { TOWN_PLACES, TOWN_TOUR } from '../data/townPlaces';
 import { SEASON_NAMES, solarTermAt } from '../core/calendar';
 import { weatherOn } from '../core/weather';
 import { GameState, Weather } from '../core/types';
@@ -170,8 +171,6 @@ interface TownPlace {
     h: number;
 }
 
-const PLACE_NAMES: Record<string, string> = { hiring: '招工处' };
-
 /** 镇子地图里第 x 列第 y 行格子中心的节点坐标（地图节点以中心为原点）。 */
 function townCell(mapNode: Node, x: number, y: number): [number, number] {
     const ui = mapNode.getComponent(UITransform)!;
@@ -187,12 +186,14 @@ function bindPlaces(mapNode: Node, mapPath: string, onPlace: (id: string) => voi
         if (err || !asset || !mapNode.isValid) return;
         const places = asset.json as TownPlace[];
         for (const p of places) {
+            const def = TOWN_PLACES[p.id];
+            if (def && !def.tag) continue;
             const tagNode = uiNode(`Tag-${p.id}`, mapNode, 44, 14);
             const g = tagNode.addComponent(Graphics);
             g.fillColor = new Color(150, 40, 30, 230);
             g.roundRect(-22, -7, 44, 14, 3);
             g.fill();
-            label(tagNode, PLACE_NAMES[p.id] ?? p.id, 10, INK, 44, 14);
+            label(tagNode, def?.name ?? p.id, 10, INK, 44, 14);
             const [cx, cy] = townCell(mapNode, p.x + (p.w - 1) / 2, p.y);
             tagNode.setPosition(cx, cy + 14, 0);
         }
@@ -240,6 +241,7 @@ function loadTown(mapNode: Node, regionId: string, hud: Hud, layout: ScreenLayou
         const tiled = mapNode.addComponent(TiledMap);
         tiled.tmxAsset = asset;
         const mv = mapNode.addComponent(MapView);
+        mv.maxCells = TILED_MAX_CELLS;
         mv.insetTop = hud.height;
         mv.insetBottom = layout.hud.bottomPad;
         const people = mapNode.addComponent(People);
@@ -312,6 +314,7 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
             townLoaded = true;
             loadTown(town, state.region, hud, layout, (id) => {
                 if (id === 'hiring') openHiring('self');
+                else if (TOWN_PLACES[id]) hud.say(TOWN_PLACES[id].intro);
             }, (f) => {
                 focusTown = f;
             });
@@ -351,12 +354,15 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         const v = n.addComponent(HiringView);
         Object.assign(v, { world: WORLD, state, via, onChanged: onWorkersChanged, onClose: onOverlayClosed });
     });
-    // 镇上右下角：去招工处（把地图挪到告示栏那儿，要点告示栏才能招人）
+    // 镇上右下角：逛逛（依次把地图挪到各处风景）、去招工处（要点告示栏才能招人）
+    let tour = 0;
+    const goTo = (id: string) => {
+        focusTown?.(id);
+        hud.say(`${TOWN_PLACES[id].name}：${TOWN_PLACES[id].intro}`);
+    };
     townActions = buildActions(canvasNode, W, H, layout, [
-        ['招工处', () => {
-            focusTown?.('hiring');
-            hud.say('广场东边的告示栏就是招工处，点它');
-        }],
+        ['逛逛', () => goTo(TOWN_TOUR[tour++ % TOWN_TOUR.length])],
+        ['招工处', () => goTo('hiring')],
     ]);
     townActions.active = false;
 

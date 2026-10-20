@@ -29,7 +29,7 @@ test('地盘：摆建筑扣钱，压到别的东西、出界、没解锁、钱�
     assert.equal(s.gold, gold - WORLD.buildings.well.price);
 
     assert.deepEqual(canPlace(WORLD, s, 'jar', 2, 1), { ok: false, reason: '这里已经有东西了' });
-    assert.deepEqual(canPlace(WORLD, s, 'well', 23, 0), { ok: false, reason: '超出地盘了' });
+    assert.deepEqual(canPlace(WORLD, s, 'well', 35, 0), { ok: false, reason: '超出地盘了' });
     assert.deepEqual(canPlace(WORLD, s, 'shop', 0, 3), { ok: false, reason: '小镇才能盖' });
     // 开局的土路上不能盖房
     assert.deepEqual(canPlace(WORLD, s, 'jar', 11, 18), { ok: false, reason: '不能盖在路上' });
@@ -70,8 +70,8 @@ test('地盘：路面四邻掩码，土路和石板路连着，菜地不连路',
     assert.equal(terrainMask(g, w, 3, 0, 1), 0);
     const s = fresh();
     const t = terrainGrid(WORLD, s.village);
-    assert.equal(t[14 * 24 + 11], 'dirt');
-    assert.equal(terrainMask(t, 24, 32, 11, 15), N | E | S);
+    assert.equal(t[14 * 36 + 11], 'dirt');
+    assert.equal(terrainMask(t, 36, 44, 11, 15), N | E | S);
     assert.equal(W, 8);
 });
 
@@ -85,7 +85,7 @@ test('存档：第 1 版存档读进来送开局地盘；删掉的建筑和越�
     assert.equal(loaded.village.items.length, WORLD.villageStarter.length);
 
     const bad = JSON.parse(serialize(s));
-    bad.village.items.push({ uid: 999, def: 'ufo', x: 1, y: 1 }, { uid: 1000, def: 'well', x: 23, y: 0 });
+    bad.village.items.push({ uid: 999, def: 'ufo', x: 1, y: 1 }, { uid: 1000, def: 'well', x: 35, y: 0 });
     const fixed = deserialize(JSON.stringify(bad), WORLD);
     assert.equal(fixed.village.items.length, WORLD.villageStarter.length);
     assert.ok(fixed.village.nextUid >= 1001);

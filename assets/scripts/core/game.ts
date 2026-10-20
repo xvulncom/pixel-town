@@ -11,8 +11,8 @@ import { seedItem } from './inventory';
 import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
-/** 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工。 */
-export const SAVE_VERSION = 5;
+/** 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工，第 6 版地盘放大和天然地貌（village.cleared）。 */
+export const SAVE_VERSION = 6;
 export const START_GOLD = 300;
 export const STARTER_SEEDS = 5;
 

@@ -12,7 +12,7 @@ export function lanternAt(p: Pen, x: number, y: number): void {
 }
 
 export interface HouseOpts {
-    sign?: 'shop' | 'workshop';
+    sign?: 'shop' | 'workshop' | 'tea' | 'cloth' | 'rice';
     /** 两侧马头墙 */
     gable?: boolean;
     /** 两层：中间多一道腰檐和一排窗 */
@@ -159,6 +159,28 @@ export function house(p: Pen, w: number, h: number, o: HouseOpts = {}): void {
         for (let k = 0; k < 3; k++) p.R(sx + 5 + k * 7, wy + 6, 3, 2, 0xe3c58a);
         for (const [lx, ly] of [[dx + dw + 6, base - 5], [dx + dw + 12, base - 5], [dx + dw + 9, base - 10]]) {
             p.E(lx, ly, 3, 3, (ddx, ddy) => (ddx * ddx + ddy * ddy < 3 ? 0xd9b37a : 0x8a5a34));
+        }
+    } else if (o.sign === 'tea' || o.sign === 'cloth' || o.sign === 'rice') {
+        // 集市街上的铺子：招牌颜色不同，茶馆门边挂一面布幌子，布庄挂几匹布，米铺门口堆米袋
+        const col = { tea: [0x2f5a3a, 0x4f8a5a], cloth: [0x2a3a5a, 0x3d6fb0], rice: [0x8a6a2a, 0xe3b341] }[o.sign];
+        const sx = Math.floor(pw / 2) - 14;
+        p.R(sx, wy + 3, 28, 8, col[0]);
+        p.R(sx + 1, wy + 4, 26, 6, col[1]);
+        for (let k = 0; k < 3; k++) p.R(sx + 5 + k * 7, wy + 6, 4, 2, C.paper);
+        if (o.sign === 'tea') {
+            const fx = 5;
+            p.R(fx, wy - 2, 1, 30, C.woodDark);
+            p.R(fx + 1, wy, 10, 1, C.woodDark);
+            for (let y = wy + 1; y < wy + 18; y++) p.R(fx + 2, y, 8 - (y > wy + 14 ? (y - wy - 14) * 2 : 0), 1, y % 5 === 0 ? 0xe3dccb : 0xf1eee4);
+            p.R(fx + 4, wy + 5, 4, 4, 0x2f5a3a);
+            p.R(fx + 5, wy + 10, 2, 3, 0x2f5a3a);
+        } else if (o.sign === 'cloth') {
+            const cols = [0xe98fa6, 0x7cc0b0, 0xe3b341];
+            cols.forEach((c, k) => p.R(dx + dw + 6 + k * 5, wy + 4, 4, 16, c));
+        } else {
+            for (const [lx, ly] of [[dx - 8, base - 6], [dx - 14, base - 6], [dx + dw + 8, base - 6]]) {
+                p.E(lx, ly, 4, 3, (ddx, ddy) => (ddx + ddy < -2 ? 0xeee0b4 : 0xd8c690));
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 // 建造栏：竖屏在底部一排建筑卡片，横屏在右侧一列（卡片排成网格）；位置大小由 core/screen 的 screenLayout 给。
 // 选中卡片后在地图上点格子摆放；路和菜地点一下铺一格，房子先出虚影再点「放这里」。
-// 「拆除」模式下点哪拆哪，退一半钱。没选东西时点菜地种菜、浇水、收获卖钱。每次改动都存档。
+// 「拆除」模式下点哪拆哪，退一半钱；点到大石头、老树、溪水这些天然地貌是花钱开荒。没选东西时点菜地种菜、浇水、收获卖钱。每次改动都存档。
 // 作物生长和工人由常驻模拟（Sim）推进，这里只听它的 'tick' 刷新画面；开局时把离线这段的结果说一句。「巡村」一键把整片地收、浇、种一遍。
 // 屏幕转了由 Boot 整个重搭，这里不监听尺寸变化。
 
@@ -11,7 +11,7 @@ import { plotIndexAt, seedChoices, tend } from '../core/fields';
 import { OfflineReport, simulate } from '../core/simulate';
 import { patrol, patrolSummary } from '../core/patrol';
 import { Rect } from '../core/screen';
-import { anchorFromCell, canPlace, place, removeAt, tierUnlocked } from '../core/village';
+import { anchorFromCell, canPlace, clearWild, occupancy, place, removeAt, tierUnlocked, wildAt } from '../core/village';
 import { saveGame, SaveStore } from './Store';
 import { simEvents } from './Sim';
 import { VillageView } from './VillageView';
@@ -307,7 +307,7 @@ export class VillageBuild extends Component {
 
     private toggleRemove(): void {
         this.setMode(this.mode.kind === 'remove' ? { kind: 'idle' } : { kind: 'remove' });
-        if (this.mode.kind === 'remove') this.say('点要拆的东西，退一半钱');
+        if (this.mode.kind === 'remove') this.say('点要拆的东西退一半钱；点石头、老树、竹丛、溪水是花钱开荒');
     }
 
     private setMode(m: Mode): void {
@@ -345,6 +345,16 @@ export class VillageBuild extends Component {
         if (m.kind === 'idle') {
             this.tendAt(cell[0], cell[1]);
         } else if (m.kind === 'remove') {
+            // 空地上的天然地貌：花钱开荒（溪水上架了桥的先拆桥）
+            const [cx, cy] = cell;
+            const o = occupancy(this.world, this.state.village);
+            const i = cy * o.w + cx;
+            if (!o.objects[i] && !o.ground[i] && wildAt(this.world, this.state.village, cx, cy)) {
+                const c = clearWild(this.world, this.state, cx, cy);
+                this.say(c.ok ? `${c.wild.name}清掉了，花了 ${c.wild.price} 金，这块地能盖东西了` : c.reason);
+                if (c.ok) this.changed();
+                return;
+            }
             const r = removeAt(this.world, this.state, cell[0], cell[1]);
             if (!r.ok) {
                 this.say(r.reason);

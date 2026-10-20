@@ -15,6 +15,9 @@ const LIST: BuildingDef[] = [
     g('road_dirt', '土路', 'village', 2, 'dirt'),
     g('field', '菜地', 'village', 5, 'soil'),
     g('road_stone', '石板路', 'town', 5, 'stone'),
+    g('road_gravel', '碎石路', 'village', 3, 'gravel'),
+    g('pond', '池塘', 'village', 20, 'water'),
+    { ...g('bridge', '木桥', 'village', 25, 'wood'), onWater: true },
     // 房子：占地是最下面两行（墙和台阶），屋顶往上盖
     b('house', '民居', 'village', 120, [6, 2]),
     b('house_gable', '马头墙民居', 'village', 200, [6, 2]),
@@ -36,6 +39,18 @@ const LIST: BuildingDef[] = [
     b('jar', '水缸', 'village', 10, [1, 1]),
     b('pot', '盆栽', 'village', 10, [1, 1]),
     b('fence', '篱笆', 'village', 5, [1, 1]),
+    b('flowerbed', '花圃', 'village', 15, [1, 1]),
+    b('stone_lamp', '石灯', 'village', 30, [1, 1]),
+    b('beehive', '蜂箱', 'village', 35, [1, 1]),
+    b('scarecrow', '稻草人', 'village', 20, [1, 1]),
+    b('haystack', '草垛', 'village', 15, [2, 1]),
+    // 农家棚舍和村里的公共去处
+    b('coop', '鸡舍', 'village', 90, [3, 2]),
+    b('duck_shed', '鸭棚', 'village', 90, [3, 2]),
+    b('grape_trellis', '葡萄架', 'town', 120, [3, 1]),
+    b('threshing', '晒谷场', 'town', 150, [4, 3]),
+    b('shrine', '土地庙', 'town', 260, [3, 2]),
+    b('pavilion', '凉亭', 'town', 300, [4, 2]),
     // 树：只占树干那一格，树冠往上盖
     b('tree', '大树', 'village', 30, [1, 1]),
     b('tree_peach', '桃树', 'village', 50, [1, 1]),
@@ -46,11 +61,12 @@ const LIST: BuildingDef[] = [
 
 export const BUILDINGS: Record<string, BuildingDef> = Object.fromEntries(LIST.map((d) => [d.id, d]));
 
-// 升档条件之后和人口、繁荣度挂钩（见方案「世界结构」），现在只定大小
+// 升档条件之后和人口、繁荣度挂钩（见方案「世界结构」），现在只定大小。
+// 2026-10-21 放大（原 24×32 / 40×48 / 64×72）：只往右、往下长，老存档的东西坐标不变。
 export const TIERS: Record<Tier, TierDef> = {
-    village: { id: 'village', name: '村庄', size: [24, 32] },
-    town: { id: 'town', name: '小镇', size: [40, 48] },
-    city: { id: 'city', name: '城市', size: [64, 72] },
+    village: { id: 'village', name: '村庄', size: [36, 44] },
+    town: { id: 'town', name: '小镇', size: [56, 64] },
+    city: { id: 'city', name: '城市', size: [80, 96] },
 };
 
 /** 开局只有自己和起始资金（用户 2026-10-19 定），地盘是一块空地，房子菜地都自己盖。要送东西在这里加。 */

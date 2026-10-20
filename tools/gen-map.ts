@@ -18,9 +18,11 @@ import { G, sheet } from './art/tileset';
 import { MapData } from './maps/builder';
 import { buildJiangnan } from './maps/jiangnan';
 import { packObjects } from './art/objects';
-import { borderDecor } from '../assets/scripts/core/border';
+import { borderDecor, borderGround, sceneMask } from '../assets/scripts/core/border';
+import { newGame } from '../assets/scripts/core/game';
+import { VillageState } from '../assets/scripts/core/types';
 import { WORLD } from '../assets/scripts/data/world';
-import { grassVariant, newVillage, terrainGrid, terrainMask, villageSize } from '../assets/scripts/core/village';
+import { activeWild, grassVariant, newVillage, place, terrainGrid, villageSize } from '../assets/scripts/core/village';
 
 function layerData(tiles: number[]): string {
     const buf = Buffer.alloc(tiles.length * 4);
@@ -113,18 +115,20 @@ const objects = packObjects();
 warmGrade(objects.canvas);
 writeFileSync(join(out, 'buildings.png'), objects.canvas.toPng());
 writeFileSync(join(out, 'buildings-frames.json'), JSON.stringify({ frames: objects.frames }, null, 2) + '\n');
-const terrainTiles = { grass: G.grass, dirt: G.dirt, stone: G.stone, soil: G.soil, stoneFill: G.stoneFill };
+const terrainTiles = {
+    grass: G.grass, dirt: G.dirt, stone: G.stone, soil: G.soil, stoneFill: G.stoneFill, gravel: G.gravel, water: G.water, wood: G.planks,
+};
 writeFileSync(join(out, 'terrain.json'), JSON.stringify(terrainTiles) + '\n');
 console.log(`${sheet.tiles.length} tiles, ${Object.keys(objects.frames).length} buildings, ${PEOPLE.length} people, written to ${out}`);
 
-/** 开局村庄的样子：和游戏里 VillageView 同样的画法（地面按掩码挑图块，建筑按占地底边从上往下画）。 */
 /** 外圈草地的亮度，游戏里 VillageView 用同一个数。 */
 const BORDER_SHADE = 0.86;
 
-function renderVillage(scale: number): Canvas {
-    const v = newVillage(WORLD);
+/** 地盘的样子：和游戏里 VillageView 同样的画法（地面按掩码挑图块，外圈远景地面，建筑和地貌按占地底边从上往下画）。 */
+function renderVillage(scale: number, v: VillageState = newVillage(WORLD)): Canvas {
     const [w, h] = villageSize(WORLD, v);
-    const m = WORLD.villageBorder.margin;
+    const border = WORLD.villageBorder;
+    const m = border.margin;
     const c = new Canvas((w + 2 * m) * TILE * scale, (h + 2 * m) * TILE * scale);
     const blit = (src: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number) => {
         for (let y = 0; y < sh; y++) {
@@ -142,12 +146,13 @@ function renderVillage(scale: number): Canvas {
     for (let y = -m; y < h + m; y++) {
         for (let x = -m; x < w + m; x++) {
             const inside = x >= 0 && y >= 0 && x < w && y < h;
-            const t = inside ? grid[y * w + x] : null;
-            const id = t ? terrainTiles[t][terrainMask(grid, w, h, x, y)] : terrainTiles.grass[grassVariant(x, y)];
+            const t = inside ? grid[y * w + x] : borderGround(border, w, h, x, y);
+            const mask = t ? sceneMask(border, grid, w, h, x, y) : 0;
+            const id = t ? terrainTiles[t][mask] : terrainTiles.grass[grassVariant(x, y)];
             blit(tileset, (id % COLS) * TILE, Math.floor(id / COLS) * TILE, TILE, TILE, x * TILE, y * TILE);
         }
     }
-    // 外圈草地压暗一点，和能盖房子的地方分开
+    // 外圈压暗一点，和能盖房子的地方分开
     const shadePen = new Pen(c, mulberry32(1));
     const S = TILE * scale;
     shadePen.D(0, 0, c.w, m * S, BORDER_SHADE);
@@ -156,20 +161,55 @@ function renderVillage(scale: number): Canvas {
     shadePen.D((w + m) * S, m * S, m * S, h * S, BORDER_SHADE);
     const items = v.items.map((it) => ({ it, def: WORLD.buildings[it.def] }))
         .filter((e) => e.def.kind === 'building' || e.def.terrain === 'soil')
-        .map(({ it, def }) => ({ it, foot: def.foot, sprite: def.sprite }));
+        .map(({ it, def }) => ({ x: it.x, y: it.y, foot: def.foot, sprite: def.sprite }));
     // 预览图里菜地轮流种上各阶段、各种作物，看作物图
     const cropSprites = Object.keys(objects.frames).filter((n) => n.startsWith('crop_'));
     let k = 0;
     for (const e of items) if (!e.sprite) e.sprite = cropSprites[k++ % cropSprites.length];
-    for (const d of borderDecor(WORLD.villageBorder, w, h)) items.push({ it: { uid: 0, def: '', x: d.x, y: d.y }, foot: [1, 1], sprite: d.sprite });
-    items.sort((a, b) => (a.it.y + a.foot[1]) - (b.it.y + b.foot[1]));
-    for (const { it, foot, sprite } of items) {
+    for (const d of activeWild(WORLD, v)) if (d.sprite) items.push({ x: d.x, y: d.y, foot: [d.w, d.h], sprite: d.sprite });
+    for (const d of borderDecor(border, w, h)) items.push({ x: d.x, y: d.y, foot: [1, 1], sprite: d.sprite });
+    items.sort((a, b) => (a.y + a.foot[1]) - (b.y + b.foot[1]));
+    for (const { x, y, foot, sprite } of items) {
         const [fx, fy, fw, fh] = objects.frames[sprite!];
-        const left = (it.x + foot[0] / 2) * TILE - fw / 2;
-        const bottom = (it.y + foot[1]) * TILE;
+        const left = (x + foot[0] / 2) * TILE - fw / 2;
+        const bottom = (y + foot[1]) * TILE;
         blit(objects.canvas, fx, fy, fw, fh, left, bottom - fh);
     }
     return c;
+}
+
+/** 预览用的小镇档地盘：新加的建造物各摆几件，看大小和画风。摆不下的打印出来。 */
+function demoVillage(): VillageState {
+    const s = newGame(WORLD, Date.now(), 'demo', 'jiangnan');
+    s.gold = 1e7;
+    s.village.tier = 'town';
+    const put = (def: string, x: number, y: number) => {
+        const r = place(WORLD, s, def, x, y);
+        if (!r.ok) console.warn(`预览摆不下 ${def}@${x},${y}：${r.reason}`);
+    };
+    const row = (def: string, x0: number, x1: number, y: number) => { for (let x = x0; x <= x1; x++) put(def, x, y); };
+    put('house_gable', 4, 10);
+    row('flowerbed', 11, 14, 11);
+    put('stone_lamp', 3, 11);
+    row('road_gravel', 2, 27, 13);
+    put('pavilion', 22, 10);
+    put('coop', 3, 16);
+    put('beehive', 8, 16);
+    put('beehive', 9, 16);
+    for (let y = 16; y < 20; y++) row('field', 12, 17, y);
+    put('scarecrow', 18, 17);
+    put('haystack', 20, 16);
+    put('grape_trellis', 3, 22);
+    put('threshing', 8, 22);
+    put('shrine', 14, 24);
+    row('road_gravel', 2, 27, 27);
+    put('bridge', 28, 27);
+    put('bridge', 29, 27);
+    row('road_gravel', 30, 35, 27);
+    for (let y = 29; y < 32; y++) row('pond', 4, 7, y);
+    put('duck_shed', 20, 32);
+    put('stone_lamp', 26, 33);
+    return s.village;
 }
 
 const previewIdx = process.argv.indexOf('--preview');
@@ -179,11 +219,15 @@ if (previewIdx > 0) {
     writeFileSync(join(dir, 'jiangnan-preview.png'), renderPreview(jiangnan, tileset, people, 1).toPng());
     writeFileSync(join(dir, 'people.png'), people.toPng());
     // 手机视角：默认 3 倍缩放下一屏约 15×27 格，720×1296
-    const views: [string, number, number][] = [['plaza', 36, 0], ['canal', 52, 30], ['farm', 4, 40], ['west', 0, 8]];
+    const views: [string, number, number][] = [
+        ['plaza', 68, 28], ['canal', 84, 58], ['farm', 36, 68], ['west', 32, 36],
+        ['teahill', 77, 0], ['dock', 133, 38], ['lake', 133, 78], ['temple', 2, 28], ['paddy', 27, 93],
+    ];
     for (const [name, x, y] of views) {
         writeFileSync(join(dir, `view-${name}.png`), renderPreview(jiangnan, tileset, people, 3, x, y, 15, 27).toPng());
     }
     writeFileSync(join(dir, 'village.png'), renderVillage(2).toPng());
+    writeFileSync(join(dir, 'village-demo.png'), renderVillage(2, demoVillage()).toPng());
     writeFileSync(join(dir, 'buildings.png'), objects.canvas.toPng());
     console.log(`preview written to ${dir}`);
 }

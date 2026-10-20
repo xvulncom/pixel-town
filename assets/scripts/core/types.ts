@@ -153,6 +153,8 @@ export interface VillageState {
     tier: 'village' | 'town' | 'city';
     items: Placement[];
     nextUid: number;
+    /** 已经开荒清掉的天然地貌 id（见 data/villageWild.ts），存档第 6 版加入 */
+    cleared: string[];
 }
 
 export type Failure = { ok: false; reason: string };
