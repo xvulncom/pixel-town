@@ -1,7 +1,8 @@
 // 核心类型。core/ 与 data/ 下的代码不依赖 Cocos（不 import 'cc'），可以直接用 node 测试。
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
-export type Weather = 'sunny' | 'cloudy' | 'rain' | 'snow';
+/** dust 沙尘暴：只从现实天气来（见 core/realWeather.ts），菜地吹干、作物当天不长 */
+export type Weather = 'sunny' | 'cloudy' | 'rain' | 'snow' | 'dust';
 
 /** 物品 ID：作物 `crop:<id>`，种子 `seed:<id>`，其他材料直接用名字（如 `wood`）。 */
 export type ItemId = string;
@@ -73,6 +74,8 @@ export interface GameState {
     hireReport: HireReport | null;
     /** 工人动态，新的在后面 */
     workerLog: WorkerEvent[];
+    /** 自己村庄的现实地点（data/places.ts 的 id），天气跟那里走；空串是跟老家镇子的原型地点。存档第 7 版加入 */
+    place: string;
 }
 
 export type PayMode = 'day' | 'piece';

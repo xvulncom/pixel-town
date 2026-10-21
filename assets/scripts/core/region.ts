@@ -11,6 +11,11 @@ export function regionOf(world: World, state: GameState): RegionDef {
     return region;
 }
 
+/** 自己村庄的天气跟哪个现实地点：玩家选过就用选的，没选跟老家原型地点 */
+export function villagePlace(world: World, state: GameState): string {
+    return state.place || world.regions[state.region]?.origin || '';
+}
+
 /** 某作物在该地域能种的季节（地域有覆盖就用覆盖值）。好友送来的外地种子也按本地气候算。 */
 export function cropSeasons(world: World, region: RegionDef, cropId: string): Season[] {
     return region.seasonOverrides?.[cropId] ?? world.crops[cropId]?.seasons ?? [];

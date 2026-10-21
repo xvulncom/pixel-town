@@ -130,6 +130,8 @@ export interface RegionDef {
     specialties: string[];
     /** 本地气候下与默认不同的种植季节，如岭南冬天也能种叶菜。 */
     seasonOverrides?: Record<string, Season[]>;
+    /** 原型地点（data/places.ts 的 id），镇上的天气跟这里的真实天气走 */
+    origin?: string;
 }
 
 /** 自己地盘的规模档位，从小到大。 */

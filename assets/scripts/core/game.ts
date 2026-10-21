@@ -12,7 +12,7 @@ import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
 /** 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工，第 6 版地盘放大和天然地貌（village.cleared）。 */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const START_GOLD = 300;
 export const STARTER_SEEDS = 5;
 
@@ -58,6 +58,7 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         errand: null,
         hireReport: null,
         workerLog: [],
+        place: '',
     };
     // 开局布局里的每格菜地各配一块地
     syncFieldPlots(state, world);
@@ -93,6 +94,8 @@ export function deserialize(json: string, world: World): GameState {
     data.errand ??= null;
     data.hireReport ??= null;
     data.workerLog ??= [];
+    // 第 7 版加入村庄的现实地点，老存档跟老家镇子的原型地点
+    if (typeof data.place !== 'string') data.place = '';
     data.workers = data.workers.filter((w) => world.workers[w.id]);
     if (data.errand && !data.workers.some((w) => w.id === data.errand!.by)) data.errand = null;
     // 第 1 版没有地盘，读档时送开局布局；以后删掉的建筑在这里清掉

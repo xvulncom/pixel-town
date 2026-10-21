@@ -8,8 +8,8 @@ import { GameState, ItemId } from '../core/types';
 import {
     advanceMarket, itemName, MarketRound, newMarket, openMarket, patienceOf, roundsLeft, serve, wantOf,
 } from '../core/market';
-import { weatherOn } from '../core/weather';
-import { regionOf } from '../core/region';
+import { placeWeather } from '../core/weather';
+import { regionOf, villagePlace } from '../core/region';
 import { VillageView } from './VillageView';
 import { button, Button, drawBox, GOLD, INK, label, PAPER, uiNode } from './ui';
 
@@ -120,7 +120,7 @@ export class MarketView extends Component {
             return;
         }
         const region = regionOf(this.world, this.state);
-        this.round = newMarket(this.state, this.world, now, weatherOn(now, region), Math.floor(Math.random() * 1e9));
+        this.round = newMarket(this.state, this.world, now, placeWeather(now, region, villagePlace(this.world, this.state)), Math.floor(Math.random() * 1e9));
         if (this.round.goods.length === 0) {
             this.idle('今天没什么货可卖');
             return;

@@ -6,10 +6,10 @@ import { World } from './defs';
 import { GameState, Season, Weather } from './types';
 import { DAY, HOUR, MINUTE, dayKey } from './time';
 import { seasonAt } from './calendar';
-import { WeatherFn, isWetWeather, weatherOn } from './weather';
+import { WeatherFn, isWetWeather, placeWeather } from './weather';
 import { DRY_SPEED, applySeasonChange, growPlot } from './farm';
 import { HelperLog, emptyHelperLog, runHelpers } from './helpers';
-import { regionOf } from './region';
+import { regionOf, villagePlace } from './region';
 import { runWorkers } from './workers';
 
 export const STEP_MS = 10 * MINUTE;
@@ -30,7 +30,8 @@ export interface OfflineReport extends HelperLog {
 
 export function simulate(state: GameState, world: World, toMs: number, opts: SimOptions = {}): OfflineReport {
     const region = regionOf(world, state);
-    const weatherFn = opts.weather ?? ((ms: number) => weatherOn(ms, region));
+    const place = villagePlace(world, state);
+    const weatherFn = opts.weather ?? ((ms: number) => placeWeather(ms, region, place));
     const report: OfflineReport = {
         ...emptyHelperLog(),
         fromMs: state.lastTick,
@@ -66,7 +67,13 @@ export function simulate(state: GameState, world: World, toMs: number, opts: Sim
 
         const hours = (end - t) / HOUR;
         const rainy = isWetWeather(weather);
+        // 沙尘暴：菜地吹干、作物当天不长，第二天浇了水照常长
+        const dust = weather === 'dust';
         for (const plot of state.plots) {
+            if (dust) {
+                plot.wetUntil = Math.min(plot.wetUntil, t);
+                continue;
+            }
             const wet = rainy || plot.wetUntil > t;
             if (growPlot(world, plot, wet ? hours : hours * DRY_SPEED)) {
                 report.matured += 1;

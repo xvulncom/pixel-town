@@ -31,7 +31,10 @@ import { HudLayout, Orientation, orientationOf, Rect, screenLayout, ScreenLayout
 import { WORLD } from '../data/world';
 import { TOWN_PLACES, TOWN_TOURS, townChoices } from '../data/townPlaces';
 import { SEASON_NAMES, solarTermAt } from '../core/calendar';
-import { weatherOn } from '../core/weather';
+import { placeWeather } from '../core/weather';
+import { villagePlace } from '../core/region';
+import { PLACES, PLACE_ORDER } from '../data/places';
+import { startRealWeather } from './RealWeather';
 import { GameState, Weather } from '../core/types';
 
 /** 竖屏的设计分辨率；横屏时宽高对调，按高度适配 */
@@ -43,6 +46,7 @@ const WEATHER_NAMES: Record<Weather, string> = {
     cloudy: '多云',
     rain: '雨',
     snow: '雪',
+    dust: '沙尘暴',
 };
 
 function buildCanvas(scene: Scene, orientation: Orientation): Node {
@@ -84,6 +88,8 @@ interface Hud {
     say(text: string): void;
     /** town 是正在逛的镇子名，不传就是老家 */
     setPlace(where: 'village' | 'town', town?: string): void;
+    /** 天气和它跟着的现实地点名（顶栏写成"晴 · 苏州"） */
+    setWeather(w: Weather, placeName: string): void;
 }
 
 /**
@@ -133,17 +139,18 @@ function buildHud(canvasNode: Node, W: number, state: GameState, layout: HudLayo
     const now = Date.now();
     const region = WORLD.regions[state.region];
     const term = solarTermAt(now);
-    const weather = weatherOn(now, region);
-    const day = `${term.name} · ${WEATHER_NAMES[weather]}`;
+    let weather: Weather = 'sunny';
+    let weatherAt = '';
     let where: 'village' | 'town' = 'village';
     let townName = region.name;
     let note = '';
     const render = () => {
         const tier = WORLD.tiers[state.village.tier].name;
         const place = where === 'village' ? `我的${tier}` : `${townName} · 镇上`;
-        const info = `${term.name}（${SEASON_NAMES[term.season]}）· ${WEATHER_NAMES[weather]}`;
+        const sky = `${WEATHER_NAMES[weather]}${weatherAt ? ` · ${weatherAt}` : ''}`;
+        const info = `${term.name}（${SEASON_NAMES[term.season]}）· ${sky}`;
         if (leftEar && rightEar) {
-            leftEar.string = day;
+            leftEar.string = `${term.name} · ${sky}`;
             rightEar.string = `金币 ${state.gold}`;
             title.string = note || place;
         } else {
@@ -155,6 +162,11 @@ function buildHud(canvasNode: Node, W: number, state: GameState, layout: HudLayo
         height: H,
         say(t) {
             note = t;
+            render();
+        },
+        setWeather(w, at) {
+            weather = w;
+            weatherAt = at;
             render();
         },
         setPlace(w, town) {
@@ -297,6 +309,51 @@ function buildTownPicker(n: Node, r: Rect, towns: string[], home: string, go: (i
     });
 }
 
+/** 选村庄地点的弹层：第一个是"跟老家"，后面按地点表分页，两列。当前选中的高亮。 */
+function buildPlacePicker(n: Node, r: Rect, state: GameState, pick: (id: string) => void, cancel: () => void): void {
+    n.on(Node.EventType.TOUCH_START, () => undefined);
+    const shade = n.addComponent(Graphics);
+    shade.fillColor = new Color(0, 0, 0, 140);
+    shade.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+    shade.fill();
+    const home = WORLD.regions[state.region].origin ?? '';
+    const ids = ['', ...PLACE_ORDER.filter((id) => id !== home)];
+    const cols = 2;
+    const rows = Math.max(3, Math.min(6, Math.floor((r.h - 300) / 92)));
+    const per = cols * rows;
+    const pages = Math.ceil(ids.length / per);
+    const bw = Math.min(260, (r.w - 100) / cols);
+    const bh = 76;
+    const gap = 14;
+    const boxW = cols * bw + (cols - 1) * gap + 40;
+    const boxH = 70 + rows * (bh + gap) + 90 + 20;
+    const box = uiNode('Box', n, boxW, boxH);
+    drawBox(box.addComponent(Graphics), boxW, boxH, PAPER, 16, INK);
+    const title = label(box, '村子的天气跟哪里？', 32, GOLD, boxW - 40, 56);
+    title.node.setPosition(0, boxH / 2 - 40, 0);
+    const grid = uiNode('Grid', box, boxW, rows * (bh + gap));
+    grid.setPosition(0, boxH / 2 - 70 - (rows * (bh + gap)) / 2, 0);
+    let page = Math.floor(Math.max(0, ids.indexOf(state.place)) / per);
+    const draw = () => {
+        grid.destroyAllChildren();
+        ids.slice(page * per, page * per + per).forEach((id, i) => {
+            const name = id ? PLACES[id].name : `跟老家（${PLACES[home]?.name ?? '随机'}）`;
+            const b = button(grid, name, bw, bh, () => pick(id), `Place-${id || 'home'}`);
+            b.label.fontSize = 26;
+            b.setActive(id === state.place);
+            b.node.setPosition((i % cols - (cols - 1) / 2) * (bw + gap), (rows - 1) / 2 * (bh + gap) - Math.floor(i / cols) * (bh + gap), 0);
+        });
+    };
+    draw();
+    const navW = (boxW - 40 - 2 * gap) / 3;
+    const navY = -boxH / 2 + 20 + 40;
+    [['上一页', () => { page = (page + pages - 1) % pages; draw(); }], ['算了', cancel], ['下一页', () => { page = (page + 1) % pages; draw(); }]]
+        .forEach(([text, fn], i) => {
+            const b = button(box, text as string, navW, 72, fn as () => void, `Nav-${i}`);
+            b.node.setPosition((i - 1) * (navW + gap), navY, 0);
+        });
+}
+
 let current: { orientation: Orientation; w: number; h: number; teardown: () => void } | null = null;
 
 function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): void {
@@ -363,6 +420,7 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         village.active = where === 'village';
         showVillageUi();
         hud.setPlace(where, WORLD.regions[townId].name);
+        refreshWeather();
     };
     /** 选去哪座镇子：只有一座就直接去 */
     const pickTown = () => {
@@ -383,6 +441,19 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         rotateTo(orientation === 'portrait' ? 'landscape' : 'portrait', () => setTimeout(() => checkScreen(scene, state, store, sim), 300));
     } : null);
     hud.setPlace(where);
+    /** 顶栏天气：村里跟村庄的地点，镇上跟那座镇子的原型地点；沙尘暴时整屏发黄 */
+    const refreshWeather = () => {
+        const now = Date.now();
+        const r = where === 'village' ? WORLD.regions[state.region] : WORLD.regions[townId];
+        const place = where === 'village' ? villagePlace(WORLD, state) : r.origin ?? '';
+        const w = placeWeather(now, r, place);
+        hud.setWeather(w, PLACES[place]?.name ?? '');
+        const dl = light.getComponent(DayLight)!;
+        dl.dust = w === 'dust';
+        dl.redraw();
+    };
+    refreshWeather();
+    simEvents.on('tick', refreshWeather);
 
     // 弹层（钓鱼、摆摊）盖住顶栏以下整块
     const overlayRect: Rect = { x: 0, y: hud.height, w: W, h: H - hud.height };
@@ -470,11 +541,27 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
                 const m = n.addComponent(MarketView);
                 Object.assign(m, { world: WORLD, state, icons: vv, onGold: () => build?.changed(), onClose: onOverlayClosed });
             })],
+            ['地点', () => openOverlay('PlacePicker', (n) => buildPlacePicker(n, overlayRect, state, (id) => {
+                state.place = id;
+                saveGame(store, state);
+                closeOverlay();
+                onOverlayClosed();
+                refreshWeather();
+                hud.say(`村里的天气跟着${PLACES[villagePlace(WORLD, state)]?.name ?? '老家'}走`);
+            }, () => {
+                closeOverlay();
+                onOverlayClosed();
+            }))],
         ]);
         showVillageUi();
     };
 
-    current = { orientation, w: W, h: H, teardown: () => canvasNode.destroy() };
+    current = {
+        orientation, w: W, h: H, teardown: () => {
+            simEvents.off('tick', refreshWeather);
+            canvasNode.destroy();
+        },
+    };
 }
 
 /** 屏幕转了或者大小变了就重搭；只差一两个像素的不管。force 时无论如何重搭（换成了云端存档）。 */
@@ -497,7 +584,8 @@ function onLaunch(scene: Scene): void {
     if (scene.name !== 'main' || scene.getChildByName('Canvas') || launching) return;
     launching = true;
     // 先定存档放哪（网页版可能要先输邀请码、拉服务器存档），再开局
-    void prepareBackend().then(({ store, cloud }) => {
+    // 现实天气和存档一起准备，天气最多等几秒，免得离线这段推进用错天气
+    void Promise.all([prepareBackend(), startRealWeather()]).then(([{ store, cloud }]) => {
         launching = false;
         if (scene.isValid) start(scene, store, cloud);
     });

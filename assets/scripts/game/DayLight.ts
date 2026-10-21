@@ -1,4 +1,4 @@
-// 晨昏光照：整屏盖一层颜色，颜色由 core/lighting 按北京时间算，每 30 秒更新一次。
+// 晨昏光照：整屏盖一层颜色，颜色由 core/lighting 按北京时间算，每 30 秒更新一次。沙尘暴天再叠一层土黄。
 
 import { _decorator, Color, Component, Graphics, view } from 'cc';
 import { tintAt } from '../core/lighting';
@@ -10,6 +10,8 @@ const { ccclass } = _decorator;
 export class DayLight extends Component {
     /** 调试用：设了就固定在这个小时，不跟现实时间走 */
     fixedHour: number | null = null;
+    /** 沙尘暴：Boot 按当前所在地的天气设 */
+    dust = false;
     private elapsed = 30;
 
     update(dt: number): void {
@@ -26,6 +28,11 @@ export class DayLight extends Component {
         const tint = tintAt(this.fixedHour ?? p.hour + p.minute / 60);
         const vis = view.getVisibleSize();
         g.clear();
+        if (this.dust) {
+            g.fillColor = new Color(196, 150, 84, 96);
+            g.rect(-vis.width / 2, -vis.height / 2, vis.width, vis.height);
+            g.fill();
+        }
         if (tint.a <= 0) return;
         g.fillColor = new Color(tint.r, tint.g, tint.b, Math.round(tint.a * 255));
         g.rect(-vis.width / 2, -vis.height / 2, vis.width, vis.height);

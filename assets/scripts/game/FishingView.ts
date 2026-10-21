@@ -8,8 +8,8 @@ import { GameState } from '../core/types';
 import {
     biteDelayMs, fishDexProgress, fishPool, hookWindowMs, landFish, newReel, Reel, rollFish, stepReel, ZONE,
 } from '../core/fishing';
-import { weatherOn } from '../core/weather';
-import { regionOf } from '../core/region';
+import { placeWeather } from '../core/weather';
+import { regionOf, villagePlace } from '../core/region';
 import { VillageView } from './VillageView';
 import { button, drawBox, GOLD, INK, label, uiNode } from './ui';
 
@@ -134,7 +134,7 @@ export class FishingView extends Component {
     private cast(): void {
         const now = Date.now();
         const region = regionOf(this.world, this.state);
-        const pool = fishPool(this.world, region.id, now, weatherOn(now, region));
+        const pool = fishPool(this.world, region.id, now, placeWeather(now, region, villagePlace(this.world, this.state)));
         const f = rollFish(pool, Math.random());
         if (!f) {
             this.ready('这会儿水里没动静，晚点再来');
