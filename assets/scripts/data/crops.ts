@@ -32,4 +32,7 @@ export const CROPS: Record<string, CropDef> = {
     persimmon: { id: 'persimmon', name: '柿子', seasons: ['autumn'], growHours: 16, regrowHours: 10, seedPrice: 120, sellPrice: 100, specialty: true },
     goji: { id: 'goji', name: '枸杞', seasons: ['summer'], growHours: 14, regrowHours: 10, seedPrice: 120, sellPrice: 95, specialty: true },
     apple: { id: 'apple', name: '苹果', seasons: ['autumn'], growHours: 18, regrowHours: 12, seedPrice: 120, sellPrice: 110, specialty: true },
+    // 西部牛仔镇的特产：耐旱耐晒
+    chili: { id: 'chili', name: '辣椒', seasons: ['summer'], growHours: 10, regrowHours: 6, seedPrice: 100, sellPrice: 70, specialty: true },
+    pricklypear: { id: 'pricklypear', name: '仙人掌果', seasons: ['summer', 'autumn'], growHours: 20, regrowHours: 12, seedPrice: 120, sellPrice: 105, specialty: true },
 };

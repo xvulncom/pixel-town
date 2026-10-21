@@ -10,12 +10,20 @@ export interface Look {
     hairStyle: 'short' | 'bun' | 'long' | 'bald';
     top: number;
     pants: number;
-    hat?: 'straw' | 'conical' | 'scarf';
+    hat?: 'straw' | 'conical' | 'scarf' | 'cowboy' | 'bonnet';
     hatColor?: number;
     apron?: number;
     beard?: number;
     /** 小孩：整体矮 3px */
     child?: boolean;
+    /** 西部：马甲颜色 */
+    vest?: number;
+    /** 西部：胸前警徽 */
+    badge?: boolean;
+    /** 西部：脖子上的方巾颜色 */
+    bandana?: number;
+    /** 西部：长裙（盖住腿，颜色用 pants） */
+    dress?: boolean;
 }
 
 export const DIRS = ['down', 'left', 'right', 'up'] as const;
@@ -59,6 +67,7 @@ function front(p: Pen, o: Look, back: boolean, step: number, dy: number): void {
         p.R(5, 19 + dy, 6, 7, o.apron);
         p.R(5, 19 + dy, 6, 1, lighter(o.apron));
     }
+    westernFront(p, o, back, dy);
     // 胳膊摆动：迈左脚时右手往前
     for (const [x, side] of [[3, 2], [12, 1]] as [number, number][]) {
         const sw = step === 0 ? 0 : step === side ? 1 : -1;
@@ -116,6 +125,7 @@ function side(p: Pen, o: Look, step: number, dy: number): void {
     p.R(10, 16 + dy, 1, 10, darker(o.top));
     if (o.apron) p.R(5, 19 + dy, 2, 7, o.apron);
     p.R(5, 24 + dy, 6, 1, darker(o.top));
+    westernSide(p, o, dy);
     // 胳膊前后摆
     const ax = step === 0 ? 8 : step === 1 ? 6 : 10;
     p.R(ax, 16 + dy, 1, 6, darker(o.top, 0.85));
@@ -152,6 +162,24 @@ function hat(p: Pen, o: Look, dy: number, shift: number): void {
         const c = o.hatColor ?? 0xc9a85a;
         for (let j = 0; j < 5; j++) p.R(7 - j + shift, 1 + j + dy, 2 + j * 2, 1, j === 4 ? darker(c) : c);
         p.R(1 + shift, 5 + dy, 14, 1, darker(c));
+    } else if (o.hat === 'cowboy') {
+        // 牛仔帽：宽帽檐两头上翘，帽顶中间压个凹
+        const c = o.hatColor ?? 0x8a5a34;
+        p.R(4 + shift, 1 + dy, 8, 4, c);
+        p.R(5 + shift, 0 + dy, 2, 1, c);
+        p.R(9 + shift, 0 + dy, 2, 1, c);
+        p.R(4 + shift, 1 + dy, 3, 1, lighter(c));
+        p.R(4 + shift, 3 + dy, 8, 1, darker(c, 0.6));
+        p.R(2 + shift, 4 + dy, 12, 2, c);
+        p.R(2 + shift, 5 + dy, 12, 1, darker(c, 0.8));
+    } else if (o.hat === 'bonnet') {
+        // 遮阳软帽：包住头顶和两侧，前沿翻出一圈
+        const c = o.hatColor ?? 0xe8dcc0;
+        p.R(4, 1 + dy, 8, 4, c);
+        p.R(3, 3 + dy, 1, 7, c);
+        p.R(12, 3 + dy, 1, 7, c);
+        p.R(3, 4 + dy, 10, 1, lighter(c, 0.4));
+        p.P(7, 9 + dy + 6, darker(c, 0.8));
     } else if (o.hat === 'scarf') {
         const c = o.hatColor ?? 0x3d6fb0;
         p.R(4, 2 + dy, 8, 4, c);
@@ -221,6 +249,15 @@ export const PEOPLE: { id: string; look: Look }[] = [
     { id: 'grandpa', look: { hair: 0xdedede, hairStyle: 'bald', top: 0x8a7a5a, pants: 0x4a4a4a, beard: 0xdedede } },
     { id: 'kid', look: { hair: 0x2b2420, hairStyle: 'short', top: 0xe3b341, pants: 0xc9302c, child: true } },
     { id: 'girl', look: { hair: 0x2b2420, hairStyle: 'bun', top: 0x7cc0b0, pants: 0xf1eee4 } },
+    // 西部牛仔镇的人（只追加在后面，前面的行号不能动）
+    { id: 'sheriff', look: { hair: 0x5a3a24, hairStyle: 'short', top: 0xd8c8a0, pants: 0x3d4f6f, hat: 'cowboy', hatColor: 0x3a2a20, vest: 0x2a2420, badge: true, beard: 0x5a3a24 } },
+    { id: 'cowboy', look: { hair: 0x8a5a34, hairStyle: 'short', top: 0x3d6fb0, pants: 0x4a5a7a, hat: 'cowboy', hatColor: 0xb08a5a, bandana: 0xc9302c } },
+    { id: 'cowgirl', look: { hair: 0xd8a050, hairStyle: 'long', top: 0xe8dcc0, pants: 0x6a4a34, hat: 'cowboy', hatColor: 0xc9a070, vest: 0x8a5a34, bandana: 0x3d6fb0 } },
+    { id: 'bartender', look: { hair: 0x2b2420, hairStyle: 'bald', top: 0xf1eee4, pants: 0x2a2420, apron: 0xe8e0cc, vest: 0x6a2a2a, beard: 0x2b2420 } },
+    { id: 'prospector', look: { hair: 0xc8c0b0, hairStyle: 'short', top: 0x8a6a4a, pants: 0x5a4a3a, hat: 'cowboy', hatColor: 0x6a5a48, beard: 0xdedede } },
+    { id: 'lady', look: { hair: 0x6a3a24, hairStyle: 'bun', top: 0x8a5a9a, pants: 0x8a5a9a, hat: 'bonnet', hatColor: 0xeadfc4, dress: true } },
+    { id: 'smith', look: { hair: 0x2b2420, hairStyle: 'short', top: 0x8a7a68, pants: 0x3a3030, apron: 0x5a3a24, beard: 0x2b2420 } },
+    { id: 'ranchKid', look: { hair: 0xc89050, hairStyle: 'short', top: 0xc9302c, pants: 0x4a5a7a, hat: 'cowboy', hatColor: 0xd8b070, child: true } },
 ];
 
 export function drawPeople(r: Rnd): Canvas {
@@ -248,3 +285,46 @@ export function handAnchors(): Record<(typeof DIRS)[number], [number, number][]>
 
 export const FRAME_W = FW;
 export const FRAME_H = FH;
+
+/** 西部打扮（正面/背面）：马甲、警徽、方巾、长裙。没这些字段的人一个像素都不变。 */
+function westernFront(p: Pen, o: Look, back: boolean, dy: number): void {
+    if (o.dress) {
+        for (let y = 22; y < 29; y++) {
+            const flare = y > 25 ? 1 : 0;
+            p.R(4 - flare, y + dy, 8 + flare * 2, 1, y === 28 ? darker(o.pants) : o.pants);
+        }
+        p.R(4, 22 + dy, 8, 1, lighter(o.pants));
+    }
+    if (o.vest) {
+        if (back) p.R(4, 15 + dy, 8, 9, o.vest);
+        else {
+            p.R(4, 15 + dy, 3, 9, o.vest);
+            p.R(9, 15 + dy, 3, 9, o.vest);
+            p.R(6, 16 + dy, 1, 8, darker(o.vest));
+        }
+    }
+    if (o.badge && !back) {
+        p.P(5, 18 + dy, 0xe3b341);
+        p.P(5, 17 + dy, 0xf3d892);
+    }
+    if (o.bandana) {
+        p.R(4, 15 + dy, 8, 1, o.bandana);
+        if (!back) {
+            p.R(6, 16 + dy, 4, 1, o.bandana);
+            p.R(7, 17 + dy, 2, 1, darker(o.bandana));
+        }
+    }
+}
+
+/** 西部打扮（侧面）。 */
+function westernSide(p: Pen, o: Look, dy: number): void {
+    if (o.dress) {
+        for (let y = 22; y < 29; y++) p.R(4 - (y > 25 ? 1 : 0), y + dy, 8 + (y > 25 ? 1 : 0), 1, y === 28 ? darker(o.pants) : o.pants);
+    }
+    if (o.vest) p.R(7, 15 + dy, 4, 9, o.vest);
+    if (o.badge) p.P(5, 18 + dy, 0xe3b341);
+    if (o.bandana) {
+        p.R(5, 15 + dy, 6, 1, o.bandana);
+        p.R(4, 16 + dy, 2, 1, o.bandana);
+    }
+}

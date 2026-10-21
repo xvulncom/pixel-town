@@ -34,7 +34,17 @@ export interface MapData {
     over: number[];
     walkers: Walker[];
     places: Place[];
+    /** 主角挡路表，'#' 挡路 '.' 能走，见 MapBuilder.walkRows */
+    walk: string[];
+    /** 主角到镇上时站的格子 */
+    spawn: [number, number];
 }
+
+const flatIds = (...gs: (number[] | number[][])[]) => new Set<number>(gs.flat(2) as number[]);
+/** deco 里能踩过去的：高草、野花、院门（门开着，能进院子） */
+const SOFT = flatIds(G.tallGrass, G.flowers, G.gate);
+/** 架在水上能走的：石桥、河埠头台阶 */
+const DECK = flatIds(G.bridgeV, G.bridgeH, G.stepsDown, G.stepsUp, G.stepsLeft, G.stepsRight);
 
 const isRoad = (t: Terr) => t === Terr.Dirt || t === Terr.Stone;
 const onWater = (t: Terr) => t === Terr.Wood || t === Terr.Slab;
@@ -50,6 +60,7 @@ export class MapBuilder {
     readonly bridge = new Set<number>();
     readonly walkers: Walker[] = [];
     readonly places: Place[] = [];
+    spawn: [number, number] = [0, 0];
     readonly rnd: Rnd;
 
     constructor(readonly w: number, readonly h: number, seed: number) {
@@ -266,6 +277,30 @@ export class MapBuilder {
             }[t];
             return set[mask];
         });
-        return { w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places };
+        return {
+            w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places,
+            walk: this.walkRows(), spawn: this.spawn,
+        };
+    }
+
+    /**
+     * 主角的挡路表（core/path 读）：deco 里的东西挡路，花草除外；没架桥的水面挡路，石桥、河埠头台阶例外。
+     * 码头木板、石板桥是地形（Wood、Slab），本来就能走；崖壁石阶是 ground 图块，也能走。
+     */
+    walkRows(): string[] {
+        const rows: string[] = [];
+        for (let y = 0; y < this.h; y++) {
+            let r = '';
+            for (let x = 0; x < this.w; x++) {
+                const i = this.at(x, y);
+                const d = this.deco[i];
+                const deck = DECK.has(d);
+                const solid = d !== EMPTY && !deck && !SOFT.has(d);
+                const water = this.terr[i] === Terr.Water && !this.bridge.has(i) && !deck;
+                r += solid || water ? '#' : '.';
+            }
+            rows.push(r);
+        }
+        return rows;
     }
 }

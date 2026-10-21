@@ -41,6 +41,8 @@ export const LOOKS: Record<string, Look> = {
     tangerine: { shape: 'sapling', color: 0xf09a2a },
     persimmon: { shape: 'sapling', color: 0xe8762a },
     apple: { shape: 'sapling', color: 0xd8382e },
+    chili: { shape: 'berry', color: 0xd0302a },
+    pricklypear: { shape: 'berry', color: 0xd0405e },
 };
 
 function shade(c: number, k: number): number {

@@ -67,4 +67,16 @@ export const REGIONS: Record<string, RegionDef> = {
         crops: COMMON.filter((c) => c !== 'strawberry'),
         specialties: ['goji', 'apple'],
     },
+    western: {
+        id: 'western',
+        name: '西部牛仔镇',
+        blurb: '红岩荒漠，常年少雨，夏天又晒又热，夏末偶有雷阵雨，冬天不下雪。',
+        map: 'western',
+        climate: { wetChance: { spring: 0.08, summer: 0.15, autumn: 0.08, winter: 0.1 }, snow: false },
+        // 荒漠里种耐旱的：叶菜、草莓、黄瓜这类费水的不卖
+        crops: COMMON.filter((c) => !['bokchoy', 'spinach', 'strawberry', 'cucumber', 'napa'].includes(c)),
+        specialties: ['chili', 'pricklypear'],
+        // 冬天暖和，萝卜能一直种到冬天
+        seasonOverrides: { radish: ['autumn', 'winter'] },
+    },
 };

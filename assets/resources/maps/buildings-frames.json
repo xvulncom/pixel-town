@@ -174,320 +174,332 @@
       16,
       32
     ],
-    "crop_corn": [
+    "crop_chili": [
       192,
+      256,
+      16,
+      32
+    ],
+    "crop_corn": [
+      208,
       256,
       16,
       32
     ],
     "crop_cucumber": [
-      208,
+      224,
       256,
       16,
       32
     ],
     "crop_goji": [
-      224,
+      240,
       256,
       16,
       32
     ],
     "crop_grape": [
-      240,
+      256,
       256,
       16,
       32
     ],
     "crop_huajiao": [
-      256,
+      272,
       256,
       16,
       32
     ],
     "crop_lychee": [
-      272,
+      288,
       256,
       16,
       32
     ],
     "crop_napa": [
-      288,
+      304,
       256,
       16,
       32
     ],
     "crop_pea": [
-      304,
+      320,
       256,
       16,
       32
     ],
     "crop_persimmon": [
-      320,
+      336,
+      256,
+      16,
+      32
+    ],
+    "crop_pricklypear": [
+      352,
       256,
       16,
       32
     ],
     "crop_pumpkin": [
-      336,
-      256,
-      16,
-      32
-    ],
-    "crop_radish": [
-      352,
-      256,
-      16,
-      32
-    ],
-    "crop_soybean": [
       368,
       256,
       16,
       32
     ],
-    "crop_spinach": [
+    "crop_radish": [
       384,
       256,
       16,
       32
     ],
-    "crop_sprout": [
+    "crop_soybean": [
       400,
       256,
       16,
       32
     ],
-    "crop_strawberry": [
+    "crop_spinach": [
       416,
       256,
       16,
       32
     ],
-    "crop_sweetpotato": [
+    "crop_sprout": [
       432,
       256,
       16,
       32
     ],
-    "crop_tangerine": [
+    "crop_strawberry": [
       448,
       256,
       16,
       32
     ],
-    "crop_tomato": [
+    "crop_sweetpotato": [
       464,
       256,
       16,
       32
     ],
-    "crop_watermelon": [
+    "crop_tangerine": [
       480,
       256,
       16,
       32
     ],
-    "crop_withered": [
+    "crop_tomato": [
       496,
       256,
       16,
       32
     ],
-    "crop_yangmei": [
+    "crop_watermelon": [
       0,
+      304,
+      16,
+      32
+    ],
+    "crop_withered": [
+      16,
+      304,
+      16,
+      32
+    ],
+    "crop_yangmei": [
+      32,
       304,
       16,
       32
     ],
     "crop_young": [
-      16,
+      48,
       304,
       16,
       32
     ],
     "fish_dazhaxie": [
-      32,
+      64,
       304,
       32,
       32
     ],
     "haystack": [
-      64,
+      96,
       304,
       32,
       32
     ],
     "laundry": [
-      96,
+      128,
       304,
       48,
       32
     ],
     "scarecrow": [
-      144,
+      176,
       304,
       16,
       32
     ],
     "stone_lamp": [
-      160,
+      192,
       304,
       16,
       32
     ],
     "tea_table": [
-      176,
+      208,
       304,
       32,
       32
     ],
     "well": [
-      208,
+      240,
       304,
       32,
       32
     ],
     "wild_boulder": [
-      240,
+      272,
       304,
       32,
       32
     ],
     "bench": [
-      272,
+      304,
       304,
       32,
       16
     ],
     "fence": [
-      304,
+      336,
       304,
       16,
       16
     ],
     "fish_angci": [
-      320,
-      304,
-      32,
-      16
-    ],
-    "fish_baitiao": [
       352,
       304,
       32,
       16
     ],
-    "fish_bianyu": [
+    "fish_baitiao": [
       384,
       304,
       32,
       16
     ],
-    "fish_caoyu": [
+    "fish_bianyu": [
       416,
       304,
       32,
       16
     ],
-    "fish_guiyu": [
+    "fish_caoyu": [
       448,
       304,
       32,
       16
     ],
-    "fish_huangshan": [
+    "fish_guiyu": [
       480,
       304,
       32,
       16
     ],
-    "fish_jiyu": [
+    "fish_huangshan": [
       0,
       336,
       32,
       16
     ],
-    "fish_liyu": [
+    "fish_jiyu": [
       32,
       336,
       32,
       16
     ],
-    "fish_qingyu": [
+    "fish_liyu": [
       64,
       336,
       32,
       16
     ],
-    "fish_xiaolongxia": [
+    "fish_qingyu": [
       96,
       336,
       32,
       16
     ],
-    "fish_yinyu": [
+    "fish_xiaolongxia": [
       128,
       336,
       32,
       16
     ],
-    "flowerbed": [
+    "fish_yinyu": [
       160,
       336,
-      16,
+      32,
       16
     ],
-    "jar": [
-      176,
-      336,
-      16,
-      16
-    ],
-    "pot": [
+    "flowerbed": [
       192,
       336,
       16,
       16
     ],
-    "rocks": [
+    "jar": [
       208,
       336,
       16,
       16
     ],
-    "shrub": [
+    "pot": [
       224,
       336,
       16,
       16
     ],
-    "weeds_1": [
+    "rocks": [
       240,
       336,
       16,
       16
     ],
-    "weeds_2": [
+    "shrub": [
       256,
       336,
       16,
       16
     ],
-    "weeds_3": [
+    "weeds_1": [
       272,
       336,
       16,
       16
     ],
-    "wildflowers": [
+    "weeds_2": [
       288,
       336,
       16,
       16
     ],
-    "woodpile": [
+    "weeds_3": [
       304,
+      336,
+      16,
+      16
+    ],
+    "wildflowers": [
+      320,
+      336,
+      16,
+      16
+    ],
+    "woodpile": [
+      336,
       336,
       32,
       16

@@ -17,6 +17,8 @@ import { DIRS, drawPeople, FRAME_H, FRAME_W, FRAMES, handAnchors, PEOPLE } from 
 import { G, sheet } from './art/tileset';
 import { MapData } from './maps/builder';
 import { buildJiangnan } from './maps/jiangnan';
+import { buildWestern } from './maps/western';
+import { westernSheet, WG } from './art/western-tileset';
 import { packObjects } from './art/objects';
 import { borderDecor, borderGround, sceneMask } from '../assets/scripts/core/border';
 import { newGame } from '../assets/scripts/core/game';
@@ -30,19 +32,20 @@ function layerData(tiles: number[]): string {
     return buf.toString('base64');
 }
 
-function toTmx(map: MapData, tileCount: number, rows: number): string {
+/** image、animSets、name 默认是江南共用的 town-tiles；西部镇传自己的图块集。 */
+function toTmx(map: MapData, tileCount: number, rows: number, image = 'town-tiles.png', animSets: number[][] = G.waterAnims, name = 'town'): string {
     const layer = (id: number, name: string, tiles: number[]) =>
         `  <layer id="${id}" name="${name}" width="${map.w}" height="${map.h}">\n`
         + `    <data encoding="base64">${layerData(tiles)}</data>\n`
         + '  </layer>\n';
-    const anims = G.waterAnims.map((frames) => {
+    const anims = animSets.map((frames) => {
         const list = frames.map((t) => `      <frame tileid="${t}" duration="300"/>`).join('\n');
         return `    <tile id="${frames[0]}">\n      <animation>\n${list}\n      </animation>\n    </tile>\n`;
     }).join('');
     return '<?xml version="1.0" encoding="UTF-8"?>\n'
         + `<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${map.w}" height="${map.h}" tilewidth="${TILE}" tileheight="${TILE}" infinite="0" nextlayerid="4" nextobjectid="1">\n`
-        + `  <tileset firstgid="1" name="town" tilewidth="${TILE}" tileheight="${TILE}" tilecount="${tileCount}" columns="${COLS}">\n`
-        + `    <image source="town-tiles.png" width="${COLS * TILE}" height="${rows * TILE}"/>\n`
+        + `  <tileset firstgid="1" name="${name}" tilewidth="${TILE}" tileheight="${TILE}" tilecount="${tileCount}" columns="${COLS}">\n`
+        + `    <image source="${image}" width="${COLS * TILE}" height="${rows * TILE}"/>\n`
         + anims
         + '  </tileset>\n'
         + layer(1, 'ground', map.ground)
@@ -109,6 +112,17 @@ writeFileSync(join(out, 'people-frames.json'), JSON.stringify({
 writeFileSync(join(out, 'jiangnan.tmx'), toTmx(jiangnan, sheet.tiles.length, tileset.h / TILE));
 writeFileSync(join(out, 'jiangnan.walkers.json'), JSON.stringify(jiangnan.walkers, null, 2) + '\n');
 writeFileSync(join(out, 'jiangnan.places.json'), JSON.stringify(jiangnan.places, null, 2) + '\n');
+
+// 西部牛仔镇：单独一张图块集 western-tiles.png，其余产物同江南
+const westernTiles = westernSheet.toCanvas();
+warmGrade(westernTiles);
+const western = buildWestern();
+writeFileSync(join(out, 'western-tiles.png'), westernTiles.toPng());
+writeFileSync(join(out, 'western.tmx'), toTmx(western, westernSheet.tiles.length, westernTiles.h / TILE, 'western-tiles.png', WG.pondAnims, 'western'));
+writeFileSync(join(out, 'western.walkers.json'), JSON.stringify(western.walkers, null, 2) + '\n');
+writeFileSync(join(out, 'western.places.json'), JSON.stringify(western.places, null, 2) + '\n');
+writeFileSync(join(out, 'western.walk.json'), JSON.stringify({ spawn: western.spawn, rows: western.walk }, null, 1) + '\n');
+console.log(`western: ${westernSheet.tiles.length} tiles`);
 
 // 自己地盘用：建筑整图图集 + 路面图块编号（地面图块仍在 town-tiles.png 里）
 const objects = packObjects();
@@ -225,6 +239,14 @@ if (previewIdx > 0) {
     ];
     for (const [name, x, y] of views) {
         writeFileSync(join(dir, `view-${name}.png`), renderPreview(jiangnan, tileset, people, 3, x, y, 15, 27).toPng());
+    }
+    writeFileSync(join(dir, 'western-preview.png'), renderPreview(western, westernTiles, people, 1).toPng());
+    const westViews: [string, number, number][] = [
+        ['w-saloon', 80, 28], ['w-bank', 56, 28], ['w-livery', 12, 28], ['w-chapel', 73, 12],
+        ['w-mine', 30, 4], ['w-mesa', 110, 0], ['w-ranch', 136, 20], ['w-arroyo', 72, 66], ['w-backyard', 52, 44],
+    ];
+    for (const [name, x, y] of westViews) {
+        writeFileSync(join(dir, `view-${name}.png`), renderPreview(western, westernTiles, people, 3, x, y, 15, 27).toPng());
     }
     writeFileSync(join(dir, 'village.png'), renderVillage(2).toPng());
     writeFileSync(join(dir, 'village-demo.png'), renderVillage(2, demoVillage()).toPng());
