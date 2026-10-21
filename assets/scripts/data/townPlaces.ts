@@ -41,3 +41,11 @@ export const TOWN_TOURS: Record<string, string[]> = {
     jiangnan: TOWN_TOUR,
     western: ['mesa', 'mine', 'chapel', 'saloon', 'bank', 'sheriff', 'ranch', 'arroyo', 'hiring'],
 };
+
+/** 已经做好地图的官方小镇（地域 id）。新做一座镇子：生成地图、在 TOWN_TOURS 写逛逛路线、在这里加一行。 */
+export const OFFICIAL_TOWNS: string[] = ['jiangnan', 'western'];
+
+/** "去镇上"时列出的镇子：老家排第一，其余照 OFFICIAL_TOWNS 的顺序。 */
+export function townChoices(home: string): string[] {
+    return [...OFFICIAL_TOWNS.filter((id) => id === home), ...OFFICIAL_TOWNS.filter((id) => id !== home)];
+}

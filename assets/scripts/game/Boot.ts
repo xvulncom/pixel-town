@@ -25,11 +25,11 @@ import { prepareBackend } from './Backend';
 import { CloudSync } from '../core/sync';
 import { HireVia } from '../core/workers';
 import { loadOrNew, saveGame, SaveStore } from './Store';
-import { button, GOLD, INK, label, UI_LAYER, uiNode } from './ui';
+import { button, drawBox, GOLD, INK, label, PAPER, UI_LAYER, uiNode } from './ui';
 import { canRotate, rotateTo, screenInsets } from './SafeArea';
 import { HudLayout, Orientation, orientationOf, Rect, screenLayout, ScreenLayout } from '../core/screen';
 import { WORLD } from '../data/world';
-import { TOWN_PLACES, TOWN_TOUR } from '../data/townPlaces';
+import { TOWN_PLACES, TOWN_TOURS, townChoices } from '../data/townPlaces';
 import { SEASON_NAMES, solarTermAt } from '../core/calendar';
 import { weatherOn } from '../core/weather';
 import { GameState, Weather } from '../core/types';
@@ -82,7 +82,8 @@ interface Hud {
     /** 顶栏总高，地图上方让出这么多 */
     height: number;
     say(text: string): void;
-    setPlace(where: 'village' | 'town'): void;
+    /** town 是正在逛的镇子名，不传就是老家 */
+    setPlace(where: 'village' | 'town', town?: string): void;
 }
 
 /**
@@ -135,10 +136,11 @@ function buildHud(canvasNode: Node, W: number, state: GameState, layout: HudLayo
     const weather = weatherOn(now, region);
     const day = `${term.name} · ${WEATHER_NAMES[weather]}`;
     let where: 'village' | 'town' = 'village';
+    let townName = region.name;
     let note = '';
     const render = () => {
         const tier = WORLD.tiers[state.village.tier].name;
-        const place = where === 'village' ? `我的${tier}` : `${region.name} · 镇上`;
+        const place = where === 'village' ? `我的${tier}` : `${townName} · 镇上`;
         const info = `${term.name}（${SEASON_NAMES[term.season]}）· ${WEATHER_NAMES[weather]}`;
         if (leftEar && rightEar) {
             leftEar.string = day;
@@ -155,8 +157,9 @@ function buildHud(canvasNode: Node, W: number, state: GameState, layout: HudLayo
             note = t;
             render();
         },
-        setPlace(w) {
+        setPlace(w, town) {
             where = w;
+            if (town) townName = town;
             render();
         },
     };
@@ -268,6 +271,32 @@ function buildActions(canvasNode: Node, W: number, H: number, layout: ScreenLayo
     return bar;
 }
 
+/** 选镇子的弹层：每座镇子一个按钮（老家标出来），再加一个"算了"。 */
+function buildTownPicker(n: Node, r: Rect, towns: string[], home: string, go: (id: string) => void, cancel: () => void): void {
+    n.on(Node.EventType.TOUCH_START, () => undefined);
+    const shade = n.addComponent(Graphics);
+    shade.fillColor = new Color(0, 0, 0, 140);
+    shade.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+    shade.fill();
+    const bw = Math.min(480, r.w - 64);
+    const bh = 96;
+    const gap = 20;
+    const items: [string, () => void][] = towns.map((id) => {
+        const reg = WORLD.regions[id];
+        return [`${reg.name}${id === home ? '（老家）' : ''}`, () => go(id)];
+    });
+    items.push(['算了', cancel]);
+    const total = items.length * (bh + gap) - gap + 70;
+    const box = uiNode('Box', n, bw + 40, total + 40);
+    drawBox(box.addComponent(Graphics), bw + 40, total + 40, PAPER, 16, INK);
+    const title = label(box, '去哪座镇子？', 34, GOLD, bw, 60);
+    title.node.setPosition(0, total / 2 - 30, 0);
+    items.forEach(([text, fn], i) => {
+        const b = button(box, text, bw, bh, fn, `Town-${i}`);
+        b.node.setPosition(0, total / 2 - 70 - bh / 2 - i * (bh + gap), 0);
+    });
+}
+
 let current: { orientation: Orientation; w: number; h: number; teardown: () => void } | null = null;
 
 function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): void {
@@ -281,8 +310,14 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
     const layout = screenLayout(screenInsets(), PANEL_H);
 
     // 从下往上：镇子、自己的地盘、光照、建造栏、快捷玩法、顶栏、弹层
-    const town = uiNode('Map', canvasNode);
-    town.active = false;
+    // 每座官方小镇一个节点，第一次去的时候才加载地图
+    const towns = townChoices(state.region);
+    const townNodes = new Map<string, Node>();
+    for (const id of towns) {
+        const n = uiNode(`Map-${id}`, canvasNode);
+        n.active = false;
+        townNodes.set(id, n);
+    }
     const village = uiNode('Village', canvasNode);
     const light = uiNode('DayLight', canvasNode);
     light.addComponent(Graphics);
@@ -290,12 +325,14 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
     const panel = uiNode('BuildPanel', canvasNode);
 
     let where: 'village' | 'town' = 'village';
-    let townLoaded = false;
+    /** 正在逛的镇子（地域 id） */
+    let townId = towns[0];
+    const townLoaded = new Set<string>();
     let build: VillageBuild | null = null;
     let overlay: Node | null = null;
     let actions: Node | null = null;
     let townActions: Node | null = null;
-    let focusTown: ((id: string) => void) | null = null;
+    const focusTown = new Map<string, (id: string) => void>();
     let workers: VillageWorkers | null = null;
     const closeOverlay = () => {
         if (overlay?.isValid) overlay.destroy();
@@ -307,22 +344,40 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         if (actions) actions.active = v && !overlay;
         if (townActions) townActions.active = !v && !overlay;
     };
-    const hud = buildHud(canvasNode, W, state, layout.hud, orientation, () => {
+    /** 去哪儿：village 回自己地盘，否则去那座镇子 */
+    const goWhere = (to: 'village' | string) => {
         closeOverlay();
-        where = where === 'village' ? 'town' : 'village';
-        if (where === 'town' && !townLoaded) {
-            townLoaded = true;
-            loadTown(town, state.region, hud, layout, (id) => {
-                if (id === 'hiring') openHiring('self');
-                else if (TOWN_PLACES[id]) hud.say(TOWN_PLACES[id].intro);
+        where = to === 'village' ? 'village' : 'town';
+        if (where === 'town') townId = to;
+        if (where === 'town' && !townLoaded.has(townId)) {
+            const id = townId;
+            townLoaded.add(id);
+            loadTown(townNodes.get(id)!, id, hud, layout, (pid) => {
+                if (pid === 'hiring') openHiring('self');
+                else if (TOWN_PLACES[pid]) hud.say(TOWN_PLACES[pid].intro);
             }, (f) => {
-                focusTown = f;
+                focusTown.set(id, f);
             });
         }
-        town.active = where === 'town';
+        for (const [id, n] of townNodes) n.active = where === 'town' && id === townId;
         village.active = where === 'village';
         showVillageUi();
-        hud.setPlace(where);
+        hud.setPlace(where, WORLD.regions[townId].name);
+    };
+    /** 选去哪座镇子：只有一座就直接去 */
+    const pickTown = () => {
+        if (towns.length === 1) {
+            goWhere(towns[0]);
+            return;
+        }
+        openOverlay('TownPicker', (n) => buildTownPicker(n, overlayRect, towns, state.region, goWhere, () => {
+            closeOverlay();
+            onOverlayClosed();
+        }));
+    };
+    const hud = buildHud(canvasNode, W, state, layout.hud, orientation, () => {
+        if (where === 'village') pickTown();
+        else goWhere('village');
     }, canRotate() ? () => {
         saveGame(store, state);
         rotateTo(orientation === 'portrait' ? 'landscape' : 'portrait', () => setTimeout(() => checkScreen(scene, state, store, sim), 300));
@@ -355,14 +410,22 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         Object.assign(v, { world: WORLD, state, via, onChanged: onWorkersChanged, onClose: onOverlayClosed });
     });
     // 镇上右下角：逛逛（依次把地图挪到各处风景）、去招工处（要点告示栏才能招人）
-    let tour = 0;
+    const tours = new Map<string, number>();
     const goTo = (id: string) => {
-        focusTown?.(id);
+        focusTown.get(townId)?.(id);
         hud.say(`${TOWN_PLACES[id].name}：${TOWN_PLACES[id].intro}`);
     };
+    const nextSight = () => {
+        const list = TOWN_TOURS[WORLD.regions[townId].map] ?? [];
+        if (!list.length) return;
+        const i = tours.get(townId) ?? 0;
+        tours.set(townId, i + 1);
+        goTo(list[i % list.length]);
+    };
     townActions = buildActions(canvasNode, W, H, layout, [
-        ['逛逛', () => goTo(TOWN_TOUR[tour++ % TOWN_TOUR.length])],
+        ['逛逛', nextSight],
         ['招工处', () => goTo('hiring')],
+        ...(towns.length > 1 ? [['换镇子', pickTown] as [string, () => void]] : []),
     ]);
     townActions.active = false;
 
