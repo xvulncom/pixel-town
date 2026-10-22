@@ -24,63 +24,78 @@
     "prospector",
     "lady",
     "smith",
-    "ranchKid"
+    "ranchKid",
+    "monk",
+    "teaPicker",
+    "boatman",
+    "angler",
+    "farmer",
+    "vendor",
+    "rancher",
+    "aqiang",
+    "xiaofang",
+    "erleng",
+    "liushen",
+    "laoma",
+    "dahai",
+    "xiaowen",
+    "apeng"
   ],
   "hands": {
     "down": [
       [
         12,
-        22
+        23
       ],
       [
         12,
-        24
+        25
       ],
       [
         12,
-        22
+        23
       ]
     ],
     "left": [
       [
-        8,
-        22
-      ],
-      [
-        6,
-        23
-      ],
-      [
-        10,
-        23
-      ]
-    ],
-    "right": [
-      [
         7,
-        22
-      ],
-      [
-        9,
         23
       ],
       [
         5,
+        24
+      ],
+      [
+        9,
+        24
+      ]
+    ],
+    "right": [
+      [
+        8,
         23
+      ],
+      [
+        10,
+        24
+      ],
+      [
+        6,
+        24
       ]
     ],
     "up": [
       [
         3,
-        22
+        23
       ],
       [
         3,
-        22
+        23
       ],
       [
         3,
-        24
+        25
       ]
     ]
   }

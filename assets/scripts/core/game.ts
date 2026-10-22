@@ -1,7 +1,7 @@
 // 新开一局、存档读写。
 
 import { World } from './defs';
-import { GameState } from './types';
+import { GameState, Whereabouts } from './types';
 import { seasonAt } from './calendar';
 import { syncFieldPlots } from './fields';
 import { emptyDaily } from './daily';
@@ -11,8 +11,11 @@ import { seedItem } from './inventory';
 import { newNpcState } from './npc';
 import { newVillage, repairVillage } from './village';
 
-/** 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工，第 6 版地盘放大和天然地貌（village.cleared）。 */
-export const SAVE_VERSION = 7;
+/**
+ * 第 2 版加地盘，第 3 版菜地绑地块，第 4 版图鉴和每日记录，第 5 版雇工，第 6 版地盘放大和天然地貌（village.cleared），
+ * 第 7 版现实地点，第 8 版人在哪（at）和室内家具（interiors）。
+ */
+export const SAVE_VERSION = 8;
 export const START_GOLD = 300;
 export const STARTER_SEEDS = 5;
 
@@ -59,10 +62,27 @@ export function newGame(world: World, nowMs: number, seed: string, regionId: str
         hireReport: null,
         workerLog: [],
         place: '',
+        at: homeAt(),
+        interiors: {},
     };
     // 开局布局里的每格菜地各配一块地
     syncFieldPlots(state, world);
     return state;
+}
+
+/** 在自己地盘、出生点、不在屋里 */
+export function homeAt(): Whereabouts {
+    return { scene: 'village', town: '', x: -1, y: -1, inside: null };
+}
+
+/** 读档时检查人在哪：缺字段、镇子没了就回自己地盘；屋里的格子由游戏进屋时再核对（配方没了就站门外）。 */
+function validAt(world: World, at: Whereabouts | undefined): Whereabouts {
+    if (!at || typeof at !== 'object' || (at.scene !== 'village' && at.scene !== 'town')) return homeAt();
+    if (at.scene === 'town' && !world.regions[at.town]) return homeAt();
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : -1);
+    const inside = at.inside && typeof at.inside.key === 'string' && typeof at.inside.recipe === 'string'
+        ? { key: at.inside.key, recipe: at.inside.recipe, x: num(at.inside.x), y: num(at.inside.y) } : null;
+    return { scene: at.scene, town: at.scene === 'town' ? at.town : '', x: num(at.x), y: num(at.y), inside };
 }
 
 export function serialize(state: GameState): string {
@@ -96,6 +116,9 @@ export function deserialize(json: string, world: World): GameState {
     data.workerLog ??= [];
     // 第 7 版加入村庄的现实地点，老存档跟老家镇子的原型地点
     if (typeof data.place !== 'string') data.place = '';
+    // 第 8 版加入人在哪、室内家具；老存档站在自己地盘的出生点
+    data.at = validAt(world, data.at);
+    if (!data.interiors || typeof data.interiors !== 'object') data.interiors = {};
     data.workers = data.workers.filter((w) => world.workers[w.id]);
     if (data.errand && !data.workers.some((w) => w.id === data.errand!.by)) data.errand = null;
     // 第 1 版没有地盘，读档时送开局布局；以后删掉的建筑在这里清掉

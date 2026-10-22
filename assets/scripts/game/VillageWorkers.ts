@@ -10,6 +10,7 @@ import { World } from '../core/defs';
 import { GameState, Worker } from '../core/types';
 import { simEvents } from './Sim';
 import { VillageView } from './VillageView';
+import { MapView } from './MapView';
 import { label, uiNode } from './ui';
 
 const { ccclass } = _decorator;
@@ -31,6 +32,8 @@ interface Actor {
     zz: Label;
     frames: SpriteFrame[][];
     target: [number, number];
+    /** 没取整的位置，显示时按物理像素取整 */
+    at: [number, number];
     /** 已经摆上过位置（第一次直接放到目标处，不从原点走过去） */
     placed: boolean;
 }
@@ -86,10 +89,17 @@ export class VillageWorkers extends Component {
                 const [x, y] = this.view.footOf(cell[0], cell[1]);
                 // 站在菜地下边一格，不挡住庄稼
                 a.target = [x, y - TILE];
-                if (!a.node.active || !a.placed) a.node.setPosition(a.target[0], a.target[1], 0);
+                if (!a.node.active || !a.placed) this.put(a, a.target[0], a.target[1]);
                 a.placed = true;
             }
         }
+    }
+
+    /** 摆到 (x, y)：记下连续位置，显示时取到物理像素格（见 MapView.snap）。 */
+    private put(a: Actor, x: number, y: number): void {
+        a.at = [x, y];
+        const mv = this.node.getComponent(MapView);
+        a.node.setPosition(mv ? mv.snap(x) : Math.round(x), mv ? mv.snap(y) : Math.round(y), 0);
     }
 
     /** 他该站哪格：最近干活的那格菜地；还没干过活就站在第一户民居门口。 */
@@ -121,7 +131,7 @@ export class VillageWorkers extends Component {
         sprite.spriteFrame = frames[0][0];
         const zz = label(node, 'z z', 10, new Color(220, 230, 255, 255), 24, 12, 'zz');
         zz.node.setPosition(8, info.frameH + 4, 0);
-        const a: Actor = { node, sprite, zz, frames, target: [0, 0], placed: false };
+        const a: Actor = { node, sprite, zz, frames, target: [0, 0], at: [0, 0], placed: false };
         this.actors.set(w.id, a);
         return a;
     }
@@ -131,14 +141,14 @@ export class VillageWorkers extends Component {
         for (const [id, a] of this.actors) {
             if (!a.node.active) continue;
             const w = this.state.workers.find((x) => x.id === id);
-            const p = a.node.position;
-            const dx = a.target[0] - p.x;
-            const dy = a.target[1] - p.y;
+            const [px, py] = a.at;
+            const dx = a.target[0] - px;
+            const dy = a.target[1] - py;
             const d = Math.hypot(dx, dy);
             const step = SPEED * TILE * dt;
             if (d > 0.5) {
                 const k = Math.min(1, step / d);
-                a.node.setPosition(p.x + dx * k, p.y + dy * k, 0);
+                this.put(a, px + dx * k, py + dy * k);
                 // 朝向：down left right up
                 const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy > 0 ? 3 : 0;
                 a.sprite.spriteFrame = a.frames[dir][1 + (Math.floor(this.t * 6) % 2)];

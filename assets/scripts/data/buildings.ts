@@ -18,12 +18,12 @@ const LIST: BuildingDef[] = [
     g('road_gravel', '碎石路', 'village', 3, 'gravel'),
     g('pond', '池塘', 'village', 20, 'water'),
     { ...g('bridge', '木桥', 'village', 25, 'wood'), onWater: true },
-    // 房子：占地是最下面两行（墙和台阶），屋顶往上盖
-    b('house', '民居', 'village', 120, [6, 2]),
-    b('house_gable', '马头墙民居', 'village', 200, [6, 2]),
-    b('house_2f', '两层民居', 'town', 360, [6, 2]),
-    b('workshop', '木工坊', 'town', 400, [6, 2]),
-    b('shop', '杂货铺', 'town', 500, [7, 2]),
+    // 房子：占地是最下面两行（墙和台阶），屋顶往上盖。interior 是进门后的室内配方（data/interiors.ts）
+    { ...b('house', '民居', 'village', 120, [6, 2]), interior: 'v_home' },
+    { ...b('house_gable', '马头墙民居', 'village', 200, [6, 2]), interior: 'v_home' },
+    { ...b('house_2f', '两层民居', 'town', 360, [6, 2]), interior: 'v_home_big' },
+    { ...b('workshop', '木工坊', 'town', 400, [6, 2]), interior: 'v_workshop' },
+    { ...b('shop', '杂货铺', 'town', 500, [7, 2]), interior: 'v_shop' },
     b('stage', '戏台', 'city', 1500, [6, 2]),
     b('archway', '牌坊', 'city', 800, [6, 1]),
     // 摊位和院里的小物件
@@ -45,11 +45,12 @@ const LIST: BuildingDef[] = [
     b('scarecrow', '稻草人', 'village', 20, [1, 1]),
     b('haystack', '草垛', 'village', 15, [2, 1]),
     // 农家棚舍和村里的公共去处
-    b('coop', '鸡舍', 'village', 90, [3, 2]),
-    b('duck_shed', '鸭棚', 'village', 90, [3, 2]),
+    // 有门没室内的：点门说 locked
+    { ...b('coop', '鸡舍', 'village', 90, [3, 2]), interior: null, locked: '鸡在里面下蛋，别去打扰' },
+    { ...b('duck_shed', '鸭棚', 'village', 90, [3, 2]), interior: null, locked: '鸭棚太矮，钻不进去' },
     b('grape_trellis', '葡萄架', 'town', 120, [3, 1]),
-    b('threshing', '晒谷场', 'town', 150, [4, 3]),
-    b('shrine', '土地庙', 'town', 260, [3, 2]),
+    { ...b('threshing', '晒谷场', 'town', 150, [4, 3]), walkable: true },
+    { ...b('shrine', '土地庙', 'town', 260, [3, 2]), interior: null, locked: '土地公在里面歇着，拜一拜就好' },
     b('pavilion', '凉亭', 'town', 300, [4, 2]),
     // 树：只占树干那一格，树冠往上盖
     b('tree', '大树', 'village', 30, [1, 1]),

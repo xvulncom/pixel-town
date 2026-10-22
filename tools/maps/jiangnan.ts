@@ -5,6 +5,7 @@
 import { noise2d, pick } from '../art/canvas';
 import { CANAL_W, G, RIVER_H } from '../art/tileset';
 import { MapBuilder, MapData, Place, Terr } from './builder';
+import { rowOf } from '../art/people';
 
 export const JIANGNAN_W = 160;
 export const JIANGNAN_H = 120;
@@ -152,13 +153,24 @@ export function buildJiangnan(): MapData {
     const yards: [number, number][][] = [];
     const smallProp = () => pick(rnd, [[[G.jar]], [[G.pot]]], [0.5, 0.5]);
     /** 普通人家：底边在 baseY 行（新地图坐标）。 */
+    /** 民居进门后的室内配方：两层的屋里大一些 */
+    const homeOf = (grid: number[][]) => (grid === G.houses[2] ? 'jn_home_big' : 'jn_home');
     const plainAt = (x: number, baseY: number, grid = house()) => {
         b.place(x, baseY - grid.length + 1, grid);
+        b.door(x, baseY - grid.length + 1, grid, homeOf(grid));
         // 门口两侧摆点小物件
         for (const sx of [x - 1, x + grid[0].length]) if (rnd() < 0.6) b.tryPlace(sx, baseY, smallProp());
     };
     const plain = (x: number, baseY: number, grid = house()) => plainAt(x + OX, baseY + OY, grid);
-    const yardHouse = (x: number, baseY: number, grid: number[][]) => yards.push(b.yardHouse(x + OX, baseY + OY, grid));
+    const yardHouse = (x: number, baseY: number, grid: number[][]) => {
+        yards.push(b.yardHouse(x + OX, baseY + OY, grid));
+        b.door(x + OX, baseY + OY - grid.length + 1, grid, homeOf(grid));
+    };
+    /** 铺子：place 加一扇门 */
+    const shopAt = (x: number, y: number, grid: number[][], recipe: string) => {
+        b.place(x, y, grid);
+        b.door(x, y, grid, recipe);
+    };
     // 北岸西片：后排两户带院子，前排三户错开
     yardHouse(4, 13, G.houses[2]);
     yardHouse(14, 13, G.houses[1]);
@@ -166,7 +178,7 @@ export function buildJiangnan(): MapData {
     plain(13, 27);
     plain(21, 26);
     // 广场南边：杂货铺、一户人家
-    place(47, 21, G.shop);
+    shopAt(47 + OX, 21 + OY, G.shop, 'jn_grocery');
     plain(37, 26);
     // 北岸东片
     yardHouse(58, 15, G.houses[1]);
@@ -177,7 +189,7 @@ export function buildJiangnan(): MapData {
     plain(79, 27);
     plain(87, 26, G.houses[0]);
     // 南岸：木工坊，水巷两岸人家紧贴着水，东边几户
-    place(36, 47, G.workshop);
+    shopAt(36 + OX, 47 + OY, G.workshop, 'jn_carpenter');
     yardHouse(45, 52, G.houses[0]);
     for (const y of [53, 61]) plain(60 - 6, y);
     for (const y of [51, 59, 66]) plain(60 + CANAL_W, y);
@@ -225,10 +237,10 @@ export function buildJiangnan(): MapData {
 
     // ---------- 码头集市 ----------
     // 街北一排铺子：茶馆、布庄、米铺、一户人家
-    b.place(129, 47, G.teahouse);
+    shopAt(129, 47, G.teahouse, 'jn_tea');
     spot({ id: 'teahouse', x: 129, y: 47, w: 7, h: 6 });
-    b.place(137, 48, G.clothShop);
-    b.place(144, 48, G.riceShop);
+    shopAt(137, 48, G.clothShop, 'jn_cloth');
+    shopAt(144, 48, G.riceShop, 'jn_rice');
     plainAt(151, 52, G.houses[1]);
     // 街南摆摊，巷口两边各两个
     for (const [x, i] of [[130, 0], [134, 1], [143, 2], [147, 3], [152, 0]] as const) b.place(x, 55, G.stalls[i]);
@@ -325,22 +337,24 @@ export function buildJiangnan(): MapData {
     }
 
     // ---------- 镇上的人 ----------
-    // 行号对应 tools/art/people.ts 的 PEOPLE；新片区的和尚、采茶人、船夫、渔夫借用现有的人
+    // 行号对应 tools/art/people.ts 的 PEOPLE；新片区的人按 id 查行号（各有自己的样子和立绘）
     const walk = (id: string, row: number, path: [number, number][], speed: number) => b.walker(id, row, path.map(([x, y]) => o(x, y)), speed);
-    walk('hero', 0, [[45, 14], [45, 9]], 1);
+    // 主角（人物图第 0 行）由玩家操作，到镇上站在广场牌坊里面
+    b.spawn = o(45, 14);
     walk('gui', 1, [[47, 30], [53, 30]], 0.6);
     walk('zhou', 2, [[36, 52], [41, 52]], 0.6);
     walk('fisher', 3, [[32, 46], [74, 46]], 1);
     walk('auntie', 4, [[18, 30], [74, 30]], 0.9);
     walk('grandpa', 5, [[41, 16], [41, 12]], 0.4);
-    walk('kid', 6, [[36, 17], [36, 4], [55, 4], [55, 17]], 2);
+    // 小孩绕广场跑一圈（原先第 4 行、第 55 列那段穿过戏台台基和告示栏，主角挡路表做出来后改到空地上）
+    walk('kid', 6, [[36, 17], [36, 6], [50, 6], [50, 17]], 2);
     walk('girl', 7, [[31, 22], [31, 50]], 1);
-    b.walker('monk', 5, [[5, 48], [16, 48]], 0.4);
-    b.walker('teaPicker', 4, [[60, 18], [110, 18]], 0.5);
-    b.walker('boatman', 3, [[130, riverY + 1], [155, riverY + 1]], 0.8);
-    b.walker('angler', 1, [[127, 93], [129, 93], [129, 89], [132, 89]], 0.5);
-    b.walker('farmer', 2, [[61, 102], [61, 116]], 0.6);
-    b.walker('vendor', 6, [[128, 54], [157, 54]], 1.2);
+    b.walker('monk', rowOf('monk'), [[5, 48], [16, 48]], 0.4);
+    b.walker('teaPicker', rowOf('teaPicker'), [[60, 18], [110, 18]], 0.5);
+    b.walker('boatman', rowOf('boatman'), [[130, riverY + 1], [155, riverY + 1]], 0.8);
+    b.walker('angler', rowOf('angler'), [[127, 93], [129, 93], [129, 89], [132, 89]], 0.5);
+    b.walker('farmer', rowOf('farmer'), [[61, 102], [61, 116]], 0.6);
+    b.walker('vendor', rowOf('vendor'), [[128, 54], [157, 54]], 1.2);
 
     const lush = b.decorateGrass();
     return b.finish(lush);

@@ -102,3 +102,64 @@ export function screenLayout(s: ScreenInsets, panelH: number): ScreenLayout {
     const panel = { x: s.width - sr - SIDE_W, y: hud.height, w: SIDE_W, h: s.height - hud.height - s.safeBottom };
     return { orientation, hud, panel, map: { x: 0, y: hud.height, w: panel.x, h: s.height - hud.height } };
 }
+
+/** 地图最小缩放要满足的条件，尺寸都是设计分辨率像素。 */
+export interface ZoomLimits {
+    visW: number;
+    visH: number;
+    /** 地图节点缩放前的宽高，0 表示还没加载 */
+    mapW: number;
+    mapH: number;
+    /** 无论如何不小于这个倍数 */
+    floor: number;
+    /** 图块边长 */
+    tile?: number;
+    /** 一个图层一次最多能画多少格（引擎顶点缓冲决定），不填不限 */
+    maxCells?: number;
+}
+
+/**
+ * 像素对齐（照星露谷）：一个美术像素在屏幕上必须正好占整数个物理像素，地图和人物也都停在物理像素格上，
+ * 否则缩放不是整数倍时像素一会宽一会窄（画面闪），人物按地图像素取整时一步跳好几个物理像素（一顿一顿）。
+ * r = 每个设计像素占几个物理像素（屏幕物理宽 ÷ 设计宽），地图缩放 z 时一个美术像素占 z·r 个物理像素。
+ */
+
+/** 缩放取到物理整数倍：min、max 是设计分辨率下的上下限，取整后仍不小于 min（保证铺满、格子数不超）。 */
+export function snapZoom(z: number, r: number, min: number, max: number): number {
+    const lo = Math.max(1, Math.ceil(min * r - 1e-6));
+    const hi = Math.max(lo, Math.floor(max * r + 1e-6));
+    return Math.min(hi, Math.max(lo, Math.round(z * r))) / r;
+}
+
+/** 地图节点位置（设计像素，相对屏幕中心）取到让地图边缘落在物理像素格上。half 是屏幕物理宽或高的一半（可能带 .5）。 */
+export function snapOffset(p: number, r: number, half: number): number {
+    const c = half - Math.floor(half);
+    return (Math.round(p * r + c) - c) / r;
+}
+
+/** 地图节点里的坐标取到物理像素格：n = 一个美术像素占几个物理像素（整数）；n 不到 1 时按地图像素取整。 */
+export function snapToGrid(v: number, n: number): number {
+    return n >= 1 ? Math.round(v * n) / n : Math.round(v);
+}
+
+/** 引擎裁剪时在屏幕外多画的格数（每个方向合计），按 Cocos 3.8 实测 3 格再留 1 格余量。 */
+export const CULL_MARGIN = 4;
+
+/**
+ * 地图能缩到的最小倍数：取三者最大——下限、铺满屏幕不露边、一屏格子数不超过缓冲。
+ * 格子数按 (屏宽/图块/倍数 + 余量) × (屏高/图块/倍数 + 余量) 算，解这个二次不等式。
+ */
+export function minMapZoom(l: ZoomLimits): number {
+    let z = l.floor;
+    if (l.mapW > 0 && l.mapH > 0) z = Math.max(z, l.visW / l.mapW, l.visH / l.mapH);
+    if (l.maxCells && l.tile) {
+        const a = l.visW / l.tile;
+        const b = l.visH / l.tile;
+        const m = CULL_MARGIN;
+        const c = m * m - l.maxCells;
+        // ab·u² + m(a+b)·u + (m² − N) ≤ 0，u = 1/倍数
+        const u = (-m * (a + b) + Math.sqrt(m * m * (a + b) * (a + b) - 4 * a * b * c)) / (2 * a * b);
+        if (u > 0) z = Math.max(z, 1 / u);
+    }
+    return z;
+}

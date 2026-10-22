@@ -12,6 +12,21 @@ import {
 } from 'cc';
 import { MapView, TILED_MAX_CELLS } from './MapView';
 import { People } from './People';
+import { Hero, sortIntoSiblings } from './Hero';
+import { Cell, gridFromRows } from '../core/path';
+import { DoorDef, doorAt, interiorFor, interiorKey, InteriorRecipe, InteriorWorld, LOCKED_TEXT } from '../core/interior';
+import { giftsOwned, ShopData } from '../core/shop';
+import { FURNITURE } from '../data/furniture';
+import { INTERIORS } from '../data/interiors';
+import { SHOPS } from '../data/shops';
+import { GIFTS } from '../data/gifts';
+import { InteriorAtlas, InteriorView } from './InteriorView';
+import { ShopView } from './ShopView';
+import { walkGrid } from '../core/village';
+import { chatWith } from '../core/chat';
+import { LocalDialogueProvider } from '../core/npc';
+import { TOWN_FOLK } from '../data/townFolk';
+import { buildChatBox, ChatBox } from './ChatBox';
 import { DayLight } from './DayLight';
 import { VillageView } from './VillageView';
 import { PANEL_H, VillageBuild } from './VillageBuild';
@@ -40,6 +55,12 @@ import { GameState, Weather } from '../core/types';
 /** 竖屏的设计分辨率；横屏时宽高对调，按高度适配 */
 const DESIGN_W = 720;
 const DESIGN_H = 1280;
+
+/** 镇民说话的来源：一期本地对话库，二期换成后端大模型（同一个 DialogueProvider 接口） */
+const DIALOGUE = new LocalDialogueProvider(WORLD.dialogues);
+/** 屋里的家具和配方、店里的货和礼物 */
+const INTERIOR_WORLD: InteriorWorld = { furniture: FURNITURE, recipes: INTERIORS };
+const SHOP_DATA: ShopData = { shops: SHOPS, gifts: GIFTS };
 
 const WEATHER_NAMES: Record<Weather, string> = {
     sunny: '晴',
@@ -192,11 +213,33 @@ function townCell(mapNode: Node, x: number, y: number): [number, number] {
     return [(x + 0.5) * 16 - ui.width / 2, ui.height / 2 - (y + 0.5) * 16];
 }
 
+/** 镇上点了一下之后做什么：主角走过去，到了再触发。 */
+interface TownTaps {
+    people: People;
+    hero: () => Hero | null;
+    onPlace: (id: string) => void;
+    onTalk: (id: string) => void;
+    /** 走到房子门口以后（进屋由 buildMain 管） */
+    onDoor: (door: DoorDef) => void;
+    say: (text: string) => void;
+    /** 主角出来时站哪（存档记的位置），null 用地图出生点 */
+    spawn: () => Cell | null;
+    /** 主角出来了、走完一段停下了 */
+    onHero: (hero: Hero) => void;
+    onStopped: (cell: Cell) => void;
+}
+
 /**
- * 镇上能点的地方：每处头上挂个牌子，点到那块格子（含上面一行屋檐）就调 onPlace。
- * 招工处要人亲自到镇上来点，这就是"亲自前往"。ready 交回一个把地图挪到某处的函数。
+ * 镇上能点的地方：每处头上挂个牌子，点到那块格子（含上面一行屋檐）主角就走到旁边，到了调 onPlace。
+ * 点到镇民走到他旁边搭话，点到有门的房子走到门口进屋，点别处就走过去。招工处要人亲自到镇上来点，这就是"亲自前往"。
+ * ready 交回一个把地图挪到某处的函数。
  */
-function bindPlaces(mapNode: Node, mapPath: string, onPlace: (id: string) => void, ready: (focus: (id: string) => void) => void): void {
+function bindPlaces(mapNode: Node, mapPath: string, taps: TownTaps, ready: (focus: (id: string) => void) => void): void {
+    // 门表（gen-interiors 生成的 <地图>.doors.json）：没有就是镇上的房子都不能进
+    let doors: DoorDef[] = [];
+    resources.load(`${mapPath}.doors`, JsonAsset, (err, asset) => {
+        if (!err && asset) doors = asset.json as DoorDef[];
+    });
     resources.load(`${mapPath}.places`, JsonAsset, (err, asset) => {
         if (err || !asset || !mapNode.isValid) return;
         const places = asset.json as TownPlace[];
@@ -212,23 +255,36 @@ function bindPlaces(mapNode: Node, mapPath: string, onPlace: (id: string) => voi
             const [cx, cy] = townCell(mapNode, p.x + (p.w - 1) / 2, p.y);
             tagNode.setPosition(cx, cy + 14, 0);
         }
-        let start: Vec2 | null = null;
-        mapNode.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
-            start = e.getAllTouches().length === 1 ? e.getUILocation() : null;
-        });
-        mapNode.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-            const s = start;
-            start = null;
-            if (!s || Vec2.distance(s, e.getUILocation()) > 12) return;
+        mapNode.getComponent(MapView)?.onTap((loc) => {
+            if (!mapNode.isValid) return;
             const ui = mapNode.getComponent(UITransform)!;
             const vis = view.getVisibleSize();
             const canvas = mapNode.parent!.getComponent(UITransform)!;
-            const loc = e.getUILocation();
             const p = ui.convertToNodeSpaceAR(canvas.convertToWorldSpaceAR(new Vec3(loc.x - vis.width / 2, loc.y - vis.height / 2, 0)));
             const tx = Math.floor((p.x + ui.width / 2) / 16);
             const ty = Math.floor((ui.height / 2 - p.y) / 16);
+            const hero = taps.hero();
+            const go = hero?.ready ? hero : null;
+            // 先看点没点到人（人会走动，按此刻的位置），再看房子的门、地点，都不是就走过去
+            const who = taps.people.walkerAt(tx, ty);
+            if (who) {
+                if (!go?.walkTo({ x: who.x, y: who.y, w: 1, h: 1 }, 'beside', (ok) => ok && taps.onTalk(who.id))) taps.onTalk(who.id);
+                return;
+            }
+            const door = doorAt(doors, tx, ty);
+            if (door) {
+                const [fx, fy] = door.front;
+                const enter = (ok: boolean) => (ok ? taps.onDoor(door) : taps.say('走不过去'));
+                if (!go?.walkTo({ x: fx, y: fy, w: 1, h: 1 }, 'onto', enter)) taps.onDoor(door);
+                return;
+            }
             const hit = places.find((q) => tx >= q.x && tx < q.x + q.w && ty >= q.y - 1 && ty < q.y + q.h);
-            if (hit) onPlace(hit.id);
+            if (hit) {
+                const done = (ok: boolean) => (ok ? taps.onPlace(hit.id) : taps.say('走不过去'));
+                if (!go?.walkTo({ x: hit.x, y: hit.y, w: hit.w, h: hit.h }, 'beside', done)) taps.onPlace(hit.id);
+                return;
+            }
+            go?.walkTo({ x: tx, y: ty, w: 1, h: 1 }, 'onto');
         });
         ready((id) => {
             const p = places.find((q) => q.id === id);
@@ -239,30 +295,74 @@ function bindPlaces(mapNode: Node, mapPath: string, onPlace: (id: string) => voi
     });
 }
 
+/** 镇子地图配套的主角挡路表和出生点（gen-map 生成的 <地图>.walk.json） */
+interface TownWalk {
+    spawn: [number, number];
+    rows: string[];
+}
+
 /** 官方场地：地域的镇子，第一次去的时候才加载。 */
 function loadTown(mapNode: Node, regionId: string, hud: Hud, layout: ScreenLayout,
-    onPlace: (id: string) => void, ready: (focus: (id: string) => void) => void): void {
-    resources.load(`maps/${WORLD.regions[regionId].map}`, TiledMapAsset, (err, asset) => {
+    taps: Omit<TownTaps, 'people' | 'hero'>, ready: (focus: (id: string) => void) => void): void {
+    const mapPath = `maps/${WORLD.regions[regionId].map}`;
+    resources.load(mapPath, TiledMapAsset, (err, asset) => {
         if (err || !asset) {
             console.error('地图加载失败', err);
             hud.say('地图加载失败');
             return;
         }
         if (!mapNode.isValid) return;
-        // 像素风：关掉线性过滤，放大后不糊
-        for (const sf of asset.spriteFrames) {
-            sf.texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
-        }
-        const tiled = mapNode.addComponent(TiledMap);
-        tiled.tmxAsset = asset;
-        const mv = mapNode.addComponent(MapView);
-        mv.maxCells = TILED_MAX_CELLS;
-        mv.insetTop = hud.height;
-        mv.insetBottom = layout.hud.bottomPad;
-        const people = mapNode.addComponent(People);
-        people.mapPath = `maps/${WORLD.regions[regionId].map}`;
-        bindPlaces(mapNode, people.mapPath, onPlace, ready);
+        resources.load(`${mapPath}.walk`, JsonAsset, (e2, walkAsset) => {
+            if (e2 || !walkAsset) console.error('镇子挡路表加载失败，主角不出来', e2);
+            if (mapNode.isValid) buildTown(mapNode, mapPath, asset, (walkAsset?.json as TownWalk) ?? null, hud, layout, taps, ready);
+        });
     });
+}
+
+function buildTown(mapNode: Node, mapPath: string, asset: TiledMapAsset, walk: TownWalk | null, hud: Hud, layout: ScreenLayout,
+    taps: Omit<TownTaps, 'people' | 'hero'>, ready: (focus: (id: string) => void) => void): void {
+    // 像素风：关掉线性过滤，放大后不糊
+    for (const sf of asset.spriteFrames) {
+        sf.texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+    }
+    const tiled = mapNode.addComponent(TiledMap);
+    tiled.tmxAsset = asset;
+    const mv = mapNode.addComponent(MapView);
+    mv.maxCells = TILED_MAX_CELLS;
+    mv.insetTop = hud.height;
+    mv.insetBottom = layout.hud.bottomPad;
+    const people = mapNode.addComponent(People);
+    people.mapPath = mapPath;
+    // 主角放进人物层，和镇民一起排前后、被 over 图层盖住头
+    let hero: Hero | null = null;
+    people.onLayer = (layer) => {
+        if (!walk) return;
+        const grid = gridFromRows(walk.rows);
+        hero = mapNode.addComponent(Hero);
+        Object.assign(hero, {
+            grid: () => grid, toLocal: (x: number, y: number) => people.toLocal(x, y), layer, mapView: mv,
+            spawn: taps.spawn() ?? walk.spawn,
+            onMoved: (n: Node) => {
+                if (!people.extras.includes(n)) people.extras.push(n);
+            },
+            onStopped: taps.onStopped,
+        });
+        taps.onHero(hero);
+    };
+    bindPlaces(mapNode, mapPath, { ...taps, people, hero: () => hero }, ready);
+}
+
+/** 主角在自己地盘的出生格：存档记着就站那里；否则第一户民居门口；还没盖房就站地盘中间。 */
+function villageSpawn(state: GameState): [number, number] {
+    if (state.at.scene === 'village' && state.at.x >= 0) return [state.at.x, state.at.y];
+    const items = state.village.items;
+    const home = items.find((it) => WORLD.hiring.housing.includes(it.def));
+    if (home) {
+        const def = WORLD.buildings[home.def];
+        return [home.x + Math.floor(def.foot[0] / 2), home.y + def.foot[1]];
+    }
+    const [w, h] = WORLD.tiers[state.village.tier].size;
+    return [Math.floor(w / 2), Math.floor(h / 2)];
 }
 
 /** 地盘右下角一竖排快捷玩法：巡村、钓鱼、摆摊，蹲坑时点几下就能玩一局。 */
@@ -306,6 +406,25 @@ function buildTownPicker(n: Node, r: Rect, towns: string[], home: string, go: (i
     items.forEach(([text, fn], i) => {
         const b = button(box, text, bw, bh, fn, `Town-${i}`);
         b.node.setPosition(0, total / 2 - 70 - bh / 2 - i * (bh + gap), 0);
+    });
+}
+
+/** 选一样的小弹层：标题 + 一列按钮（和掌柜、镇民说话时选买东西、聊天、送礼）。 */
+function buildMenu(n: Node, r: Rect, title: string, items: [string, () => void][]): void {
+    n.on(Node.EventType.TOUCH_START, () => undefined);
+    const shade = n.addComponent(Graphics);
+    shade.fillColor = new Color(0, 0, 0, 140);
+    shade.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+    shade.fill();
+    const bw = Math.min(420, r.w - 64);
+    const bh = 88;
+    const gap = 18;
+    const total = items.length * (bh + gap) - gap + 70;
+    const box = uiNode('Box', n, bw + 40, total + 40);
+    drawBox(box.addComponent(Graphics), bw + 40, total + 40, PAPER, 16, INK);
+    label(box, title, 32, GOLD, bw, 60, 'Title').node.setPosition(0, total / 2 - 30, 0);
+    items.forEach(([text, fn], i) => {
+        button(box, text, bw, bh, fn, `Menu-${i}`).node.setPosition(0, total / 2 - 70 - bh / 2 - i * (bh + gap), 0);
     });
 }
 
@@ -376,6 +495,14 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         townNodes.set(id, n);
     }
     const village = uiNode('Village', canvasNode);
+    // 屋里：进门时在这下面搭一间，出门拆掉；盖在镇子和地盘上面
+    const interiorHost = uiNode('Interior', canvasNode);
+    let atlas: InteriorAtlas | null = null;
+    const atlasWaiting: ((a: InteriorAtlas) => void)[] = [];
+    InteriorAtlas.load((a) => {
+        atlas = a;
+        if (a) atlasWaiting.splice(0).forEach((fn) => fn(a));
+    });
     const light = uiNode('DayLight', canvasNode);
     light.addComponent(Graphics);
     light.addComponent(DayLight);
@@ -391,34 +518,85 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
     let townActions: Node | null = null;
     const focusTown = new Map<string, (id: string) => void>();
     let workers: VillageWorkers | null = null;
+    /** 正在屋里：那间屋子的节点 */
+    let inside: Node | null = null;
+    let villageHero: Hero | null = null;
+    const townHeroes = new Map<string, Hero>();
+    /** 和镇上的人搭话：最近说过的台词记在这里避免重复（不进存档） */
+    const recentLines: string[] = [];
+    let chat: ChatBox | null = null;
+    const talkTo = (id: string) => {
+        void chatWith(state, WORLD, TOWN_FOLK, id, Date.now(), DIALOGUE, recentLines).then((r) => {
+            if (!r) return;
+            recentLines.push(r.lineId);
+            if (recentLines.length > 8) recentLines.shift();
+            // 说话框：立绘按人物 id 取，工人还能按 look 退一步，都没有就是灰色剪影
+            chat?.show(id, r.name, r.text, r.gained, WORLD.workers[id]?.look);
+            if (r.gained > 0) saveGame(store, state);
+        });
+    };
     const closeOverlay = () => {
         if (overlay?.isValid) overlay.destroy();
         overlay = null;
     };
     const showVillageUi = () => {
-        const v = where === 'village';
+        const v = where === 'village' && !inside;
         panel.active = v;
         if (actions) actions.active = v && !overlay;
-        if (townActions) townActions.active = !v && !overlay;
+        if (townActions) townActions.active = where === 'town' && !inside && !overlay;
     };
-    /** 去哪儿：village 回自己地盘，否则去那座镇子 */
+    /** 镇子、地盘哪个露出来：屋里的时候都藏起来 */
+    const showScene = () => {
+        for (const [id, n] of townNodes) n.active = !inside && where === 'town' && id === townId;
+        village.active = !inside && where === 'village';
+        showVillageUi();
+    };
+    /** 记下主角在哪（存档里的 at）：停下来、换地方的时候 */
+    const markAt = (cell: Cell | null) => {
+        state.at = {
+            scene: where, town: where === 'town' ? townId : state.at.town,
+            x: cell ? cell[0] : -1, y: cell ? cell[1] : -1, inside: null,
+        };
+    };
+    /** 去哪儿：village 回自己地盘，否则去那座镇子；在屋里就先出来 */
     const goWhere = (to: 'village' | string) => {
         closeOverlay();
+        chat?.hide();
+        if (inside) {
+            inside.destroy();
+            inside = null;
+            hud.say('');
+        }
         where = to === 'village' ? 'village' : 'town';
         if (where === 'town') townId = to;
+        // 那边的主角已经出来了就记他站的格子；还没去过的镇子沿用存档（开机恢复时）或地图出生点
+        const h = where === 'village' ? villageHero : townHeroes.get(townId);
+        const sameAsSaved = state.at.scene === where && (where === 'village' || state.at.town === townId);
+        markAt(h?.ready ? h.cell : sameAsSaved && state.at.x >= 0 ? [state.at.x, state.at.y] : null);
         if (where === 'town' && !townLoaded.has(townId)) {
             const id = townId;
             townLoaded.add(id);
-            loadTown(townNodes.get(id)!, id, hud, layout, (pid) => {
-                if (pid === 'hiring') openHiring('self');
-                else if (TOWN_PLACES[pid]) hud.say(TOWN_PLACES[pid].intro);
+            loadTown(townNodes.get(id)!, id, hud, layout, {
+                onPlace: (pid) => {
+                    if (pid === 'hiring') openHiring('self');
+                    else if (TOWN_PLACES[pid]) hud.say(TOWN_PLACES[pid].intro);
+                },
+                onTalk: (pid) => talkOrGift(pid),
+                onDoor: (door) => {
+                    if (door.recipe) enterInterior(interiorKey(id, door), door.recipe, door.front);
+                    else hud.say(door.locked ?? LOCKED_TEXT);
+                },
+                say: (t) => hud.say(t),
+                spawn: () => (state.at.scene === 'town' && state.at.town === id && state.at.x >= 0 ? [state.at.x, state.at.y] : null),
+                onHero: (hero) => townHeroes.set(id, hero),
+                onStopped: (c) => {
+                    if (where === 'town' && townId === id && !inside) markAt(c);
+                },
             }, (f) => {
                 focusTown.set(id, f);
             });
         }
-        for (const [id, n] of townNodes) n.active = where === 'town' && id === townId;
-        village.active = where === 'village';
-        showVillageUi();
+        showScene();
         hud.setPlace(where, WORLD.regions[townId].name);
         refreshWeather();
     };
@@ -499,6 +677,11 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         ...(towns.length > 1 ? [['换镇子', pickTown] as [string, () => void]] : []),
     ]);
     townActions.active = false;
+    // 对话框贴底，让开镇上右下角那列按钮
+    const ta = townActions.getComponent(UITransform)!;
+    const tp = townActions.position;
+    chat = buildChatBox(canvasNode, W, H, hud.height, layout.hud.bottomPad,
+        { x: tp.x + W / 2 - ta.width / 2, y: H / 2 - tp.y - ta.height / 2, w: ta.width, h: ta.height });
 
     const vv = village.addComponent(VillageView);
     vv.world = WORLD;
@@ -524,6 +707,25 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
         build.report = sim.report;
         workers = village.addComponent(VillageWorkers);
         Object.assign(workers, { world: WORLD, state, view: vv });
+        // 主角：放进建筑层和房子树木一起排前后；地盘摆了东西挡路表跟着变，每次出发现算
+        const hero = village.addComponent(Hero);
+        Object.assign(hero, {
+            grid: () => walkGrid(WORLD, state.village), toLocal: (x: number, y: number) => vv.footAt(x, y),
+            layer: vv.objects!, mapView: mv, spawn: villageSpawn(state),
+            onMoved: (n: Node) => {
+                if (!vv.actors.includes(n)) vv.actors.push(n);
+                sortIntoSiblings(n);
+            },
+            onStopped: (c: Cell) => {
+                if (where === 'village' && !inside) markAt(c);
+            },
+        });
+        villageHero = hero;
+        build.hero = hero;
+        build.onDoor = (door) => {
+            if (door.recipe) enterInterior(interiorKey('village', door), door.recipe, door.front);
+            else build?.say(door.locked ?? LOCKED_TEXT);
+        };
         actions = buildActions(canvasNode, W, H, layout, [
             ['巡村', () => build?.patrolAll()],
             ['工人', () => openOverlay('Workers', (n) => {
@@ -554,7 +756,133 @@ function buildMain(scene: Scene, state: GameState, store: SaveStore, sim: Sim): 
             }))],
         ]);
         showVillageUi();
+        // 开机（或转屏重搭）时人在自家屋里：地盘画好了再进去
+        if (resume && where === 'village') enterInterior(resume.key, resume.recipe, [state.at.x, state.at.y], [resume.x, resume.y]);
     };
+
+    /** 和镇民说话：有人设的、背包里有礼物时先问聊天还是送礼 */
+    const dismiss = () => {
+        closeOverlay();
+        onOverlayClosed();
+    };
+    const openGift = (npcId: string) => openOverlay('Gift', (n) => {
+        const v = n.addComponent(ShopView);
+        Object.assign(v, {
+            world: WORLD, state, data: SHOP_DATA, icons: { village: vv, interior: atlas }, npcId, onClose: onOverlayClosed,
+            onGiven: (text: string) => {
+                saveGame(store, state);
+                chat?.show(npcId, WORLD.npcs[npcId]?.name ?? '', text);
+            },
+        });
+    });
+    const talkOrGift = (id: string) => {
+        if (!WORLD.npcs[id] || !giftsOwned(state, SHOP_DATA).length) {
+            talkTo(id);
+            return;
+        }
+        openOverlay('Talk', (n) => buildMenu(n, overlayRect, WORLD.npcs[id].name, [
+            ['聊天', () => {
+                dismiss();
+                talkTo(id);
+            }],
+            ['送礼', () => openGift(id)],
+            ['算了', dismiss],
+        ]));
+    };
+    const openShop = (shopId: string, keeperName: string) => openOverlay('Shop', (n) => {
+        const v = n.addComponent(ShopView);
+        Object.assign(v, {
+            world: WORLD, state, data: SHOP_DATA, icons: { village: vv, interior: atlas }, onClose: onOverlayClosed,
+            shopId, keeperName, regionId: where === 'town' ? townId : state.region,
+            onGold: () => {
+                saveGame(store, state);
+                build?.changed();
+            },
+        });
+    });
+    /** 点了掌柜：开店的问买东西还是聊天，有人设的还能送礼；只能聊天就直接说 */
+    let keeperLine = 0;
+    const keeperMenu = (recipe: InteriorRecipe) => {
+        const k = recipe.keeper;
+        if (!k) return;
+        const npc = k.npc && WORLD.npcs[k.npc] ? k.npc : null;
+        const say = () => {
+            dismiss();
+            if (npc) talkTo(npc);
+            else chat?.show(k.look, k.name, k.lines[keeperLine++ % k.lines.length], 0, k.look);
+        };
+        const items: [string, () => void][] = [];
+        if (recipe.shop) items.push(['买东西', () => openShop(recipe.shop!, k.name)]);
+        items.push(['聊天', say]);
+        if (npc && giftsOwned(state, SHOP_DATA).length) items.push(['送礼', () => openGift(npc)]);
+        if (items.length === 1) {
+            say();
+            return;
+        }
+        items.push(['算了', dismiss]);
+        openOverlay('Keeper', (n) => buildMenu(n, overlayRect, k.name, items));
+    };
+    /** 出门：拆掉屋子，回到门口朝外站 */
+    const leaveInterior = () => {
+        if (!inside) return;
+        inside.destroy();
+        inside = null;
+        closeOverlay();
+        chat?.hide();
+        markAt([state.at.x, state.at.y]);
+        saveGame(store, state);
+        showScene();
+        hud.say('');
+        const h = where === 'village' ? villageHero : townHeroes.get(townId);
+        h?.placeAt([state.at.x, state.at.y], 'down');
+    };
+    /**
+     * 进屋：key 是这栋房子的钥匙，front 是门前那格（出来站这里），spawn 是屋里站哪（不给就是进门那格）。
+     * 配方没了、自家房子拆了的（存档恢复时）就站在门外。
+     */
+    function enterInterior(key: string, recipeId: string, front: Cell, spawn?: Cell): void {
+        const recipe = INTERIORS[recipeId];
+        const gone = key.startsWith('v:') && !state.village.items.some((it) => `v:${it.uid}` === key);
+        if (!recipe || gone) {
+            markAt(front);
+            return;
+        }
+        const go = (a: InteriorAtlas) => {
+            if (inside) return;
+            closeOverlay();
+            chat?.hide();
+            const room = interiorFor(INTERIOR_WORLD, state, recipeId, key);
+            // 存档里 -1（或屋子排法变了出界）就站进门那格
+            const ok = spawn && spawn[0] >= 0 && spawn[1] >= 0 && spawn[0] < room.w && spawn[1] < room.h;
+            const at = ok ? spawn : room.entry;
+            markAt(front);
+            state.at.inside = { key, recipe: recipeId, x: at[0], y: at[1] };
+            saveGame(store, state);
+            const n = uiNode('Room', interiorHost);
+            const v = n.addComponent(InteriorView);
+            Object.assign(v, {
+                world: INTERIOR_WORLD, recipe, layout: room, atlas: a, spawn: at,
+                insetTop: hud.height, insetBottom: layout.hud.bottomPad,
+                onKeeper: () => keeperMenu(recipe),
+                onExit: leaveInterior,
+                onStopped: (c: Cell) => {
+                    if (state.at.inside) [state.at.inside.x, state.at.inside.y] = c;
+                },
+            });
+            inside = n;
+            showScene();
+            hud.say(recipe.name);
+        };
+        if (atlas) go(atlas);
+        else atlasWaiting.push(go);
+    }
+
+    // 开机（或转屏重搭）：回到存档记的地方；在镇上的屋里就直接进去，在自家屋里等地盘画好
+    const resume = state.at.inside;
+    if (state.at.scene === 'town' && towns.includes(state.at.town)) {
+        goWhere(state.at.town);
+        if (resume) enterInterior(resume.key, resume.recipe, [state.at.x, state.at.y], [resume.x, resume.y]);
+    }
 
     current = {
         orientation, w: W, h: H, teardown: () => {

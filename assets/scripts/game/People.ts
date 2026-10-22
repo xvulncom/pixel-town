@@ -6,6 +6,7 @@ import {
     TiledMap, UITransform, Vec2,
 } from 'cc';
 import { Dir, poseAt, WalkRoute } from '../core/walk';
+import { MapView } from './MapView';
 
 const { ccclass } = _decorator;
 const TILE = 16;
@@ -38,6 +39,10 @@ export class People extends Component {
     private actors: Actor[] = [];
     private layer: Node | null = null;
     private t0 = Date.now();
+    /** 一起排前后的别的人（主角），放在 layer 下 */
+    readonly extras: Node[] = [];
+    /** 人物层建好后调用（主角要放进来） */
+    onLayer: ((layer: Node) => void) | null = null;
 
     start(): void {
         const tiled = this.getComponent(TiledMap);
@@ -68,6 +73,7 @@ export class People extends Component {
         const deco = tiled.getLayer('deco');
         if (deco) layer.setSiblingIndex(deco.node.getSiblingIndex() + 1);
         this.layer = layer;
+        this.onLayer?.(layer);
 
         const cut = (row: number, col: number) => {
             const sf = new SpriteFrame();
@@ -92,7 +98,7 @@ export class People extends Component {
     }
 
     /** 格子坐标（脚下那格，可带小数）换成地图节点里的坐标：地图以中心为原点。 */
-    private toLocal(x: number, y: number): [number, number] {
+    toLocal(x: number, y: number): [number, number] {
         const ui = this.node.getComponent(UITransform)!;
         return [(x + 0.5) * TILE - ui.width / 2, ui.height / 2 - (y + 1) * TILE];
     }
@@ -100,15 +106,30 @@ export class People extends Component {
     update(): void {
         if (!this.layer) return;
         const seconds = (Date.now() - this.t0) / 1000;
+        const mv = this.node.getComponent(MapView);
         for (const a of this.actors) {
             const pose = poseAt(a.data, seconds);
             const [lx, ly] = this.toLocal(pose.x, pose.y);
-            a.node.setPosition(Math.round(lx), Math.round(ly), 0);
+            // 按物理像素取整：按地图像素取整的话放大后一步跳好几个屏幕像素，走起来一顿一顿
+            a.node.setPosition(mv ? mv.snap(lx) : Math.round(lx), mv ? mv.snap(ly) : Math.round(ly), 0);
             const di = ['down', 'left', 'right', 'up'].indexOf(pose.dir);
             a.sprite.spriteFrame = a.frames[di][pose.frame];
         }
         // 靠下的人后画，挡住靠上的人
-        const sorted = [...this.actors].sort((p, q) => q.node.position.y - p.node.position.y);
-        sorted.forEach((a, i) => a.node.setSiblingIndex(i));
+        const nodes = [...this.actors.map((a) => a.node), ...this.extras.filter((n) => n.isValid && n.parent === this.layer)];
+        nodes.sort((p, q) => q.position.y - p.position.y);
+        nodes.forEach((n, i) => n.setSiblingIndex(i));
+    }
+
+    /** 点到的格子上站着谁（人占脚下一格和头顶一格），返回 id 和脚下格子；没人返回 null。 */
+    walkerAt(tx: number, ty: number): { id: string; x: number; y: number } | null {
+        const seconds = (Date.now() - this.t0) / 1000;
+        for (const a of this.actors) {
+            const p = poseAt(a.data, seconds);
+            const x = Math.round(p.x);
+            const y = Math.round(p.y);
+            if (tx === x && (ty === y || ty === y - 1)) return { id: a.data.id, x, y };
+        }
+        return null;
     }
 }

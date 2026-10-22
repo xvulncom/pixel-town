@@ -3,6 +3,7 @@
 // 输出（assets/resources/maps/）：
 //   town-tiles.png      所有地图共用的图块集
 //   people.png          人物走路帧，people-frames.json 记行号、帧尺寸、手的位置
+//   portraits.png       对话立绘（每人一张 48×48），portraits-frames.json 记 id 顺序和缺立绘时用哪张
 //   jiangnan.tmx        江南地图（Tiled），jiangnan.walkers.json 记镇上走动的人和路线
 //   buildings.png       自己地盘上的建筑整图，buildings-frames.json 记每张的位置；terrain.json 记路面用哪些图块
 //
@@ -14,6 +15,7 @@ import { join } from 'node:path';
 import { mulberry32 } from '../assets/scripts/core/rng';
 import { Canvas, COLS, EMPTY, Pen, TILE, warmGrade } from './art/canvas';
 import { DIRS, drawPeople, FRAME_H, FRAME_W, FRAMES, handAnchors, PEOPLE } from './art/people';
+import { drawPortraits, portraitInfo } from './art/portraits';
 import { G, sheet } from './art/tileset';
 import { MapData } from './maps/builder';
 import { buildJiangnan } from './maps/jiangnan';
@@ -109,9 +111,15 @@ writeFileSync(join(out, 'people-frames.json'), JSON.stringify({
     rows: PEOPLE.map((p) => p.id),
     hands: handAnchors(),
 }, null, 2) + '\n');
+// 对话立绘：PEOPLE 里每人一张，按 id 取，缺的用 fallback
+const portraits = drawPortraits(mulberry32(11));
+warmGrade(portraits);
+writeFileSync(join(out, 'portraits.png'), portraits.toPng());
+writeFileSync(join(out, 'portraits-frames.json'), JSON.stringify(portraitInfo(), null, 2) + '\n');
 writeFileSync(join(out, 'jiangnan.tmx'), toTmx(jiangnan, sheet.tiles.length, tileset.h / TILE));
 writeFileSync(join(out, 'jiangnan.walkers.json'), JSON.stringify(jiangnan.walkers, null, 2) + '\n');
 writeFileSync(join(out, 'jiangnan.places.json'), JSON.stringify(jiangnan.places, null, 2) + '\n');
+writeFileSync(join(out, 'jiangnan.walk.json'), JSON.stringify({ spawn: jiangnan.spawn, rows: jiangnan.walk }, null, 1) + '\n');
 
 // 西部牛仔镇：单独一张图块集 western-tiles.png，其余产物同江南
 const westernTiles = westernSheet.toCanvas();
@@ -232,6 +240,7 @@ if (previewIdx > 0) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'jiangnan-preview.png'), renderPreview(jiangnan, tileset, people, 1).toPng());
     writeFileSync(join(dir, 'people.png'), people.toPng());
+    writeFileSync(join(dir, 'portraits.png'), portraits.toPng());
     // 手机视角：默认 3 倍缩放下一屏约 15×27 格，720×1296
     const views: [string, number, number][] = [
         ['plaza', 68, 28], ['canal', 84, 58], ['farm', 36, 68], ['west', 32, 36],

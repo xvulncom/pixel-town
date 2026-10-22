@@ -96,22 +96,31 @@ export function buildWestern(): MapData {
 
     // ---------- 主街北边一排楼（底边 MAIN_Y-3） ----------
     const nb = MAIN_Y - 3;
-    const north = (x: number, grid: number[][]) => b.place(x, nb - grid.length + 1, grid);
-    north(19, WG.livery);
-    north(30, WG.smithy);
-    north(39, WG.store);
-    north(46, WG.hotel);
-    north(53, WG.barber);
-    north(60, WG.bank);
-    north(68, WG.sheriff);
+    /** recipe 是进门后的室内配方（data/interiors.ts），不填就没有门 */
+    const north = (x: number, grid: number[][], recipe?: string) => {
+        b.place(x, nb - grid.length + 1, grid);
+        if (recipe) b.door(x, nb - grid.length + 1, grid, recipe);
+    };
+    /** 房子放下并登记门 */
+    const house = (x: number, y: number, grid: number[][], recipe: string) => {
+        b.place(x, y, grid);
+        b.door(x, y, grid, recipe);
+    };
+    north(19, WG.livery, 'w_livery');
+    north(30, WG.smithy, 'w_smithy');
+    north(39, WG.store, 'w_store');
+    north(46, WG.hotel, 'w_hotel');
+    north(53, WG.barber, 'w_barber');
+    north(60, WG.bank, 'w_bank');
+    north(68, WG.sheriff, 'w_sheriff');
     north(74, WG.noticeBoard);
-    north(83, WG.saloon);
-    north(92, WG.post);
-    north(98, WG.assay);
-    north(105, WG.cafe);
-    north(111, WG.doctor);
-    north(119, WG.stage);
-    north(127, WG.feed);
+    north(83, WG.saloon, 'w_saloon');
+    north(92, WG.post, 'w_post');
+    north(98, WG.assay, 'w_assay');
+    north(105, WG.cafe, 'w_cafe');
+    north(111, WG.doctor, 'w_doctor');
+    north(119, WG.stage, 'w_stage');
+    north(127, WG.feed, 'w_feed');
     spot('livery', 19, nb - 5, 9, 6);
     spot('smithy', 30, nb - 4, 7, 5);
     spot('store', 39, nb - 5, 7, 6);
@@ -138,7 +147,11 @@ export function buildWestern(): MapData {
     spot('waterTower', 84, 53, 3, 6);
     b.place(58, 54, WG.wagon);
     b.place(108, 55, WG.cart);
-    for (const x of [36, 48, 94, 116]) b.tryPlace(x, 55, WG.outhouse);
+    /** 茅房：有门，进不去 */
+    const outhouse = (x: number, y: number) => {
+        if (b.tryPlace(x, y, WG.outhouse)) b.door(x, y, WG.outhouse, null, '里面有人，等会儿吧');
+    };
+    for (const x of [36, 48, 94, 116]) outhouse(x, 55);
     for (let y = 53; y < 60; y++) {
         for (let x = 20; x < 134; x++) {
             if (x >= CROSS_X - 1 && x <= CROSS_X + 4) continue;
@@ -149,17 +162,17 @@ export function buildWestern(): MapData {
     // ---------- 后街一排原木小屋（底边 BACK_Y-3） ----------
     const sb = BACK_Y - 3;
     for (const [x, k] of [[30, 0], [37, 1], [44, 0], [51, 1], [58, 0], [65, 1], [86, 1], [93, 0], [100, 1], [107, 0], [114, 1], [121, 0]] as const) {
-        b.place(x, sb - 4, WG.cabins[k]);
+        house(x, sb - 4, WG.cabins[k], 'w_cabin');
         if (rnd() < 0.6) b.tryPlace(x + 6, sb, [[pick(rnd, [WG.barrel, WG.crate], [0.6, 0.4])]]);
     }
 
     // ---------- 教堂、北边人家 ----------
-    b.place(CROSS_X - 1, 19, WG.chapel);
+    house(CROSS_X - 1, 19, WG.chapel, 'w_chapel');
     spot('chapel', CROSS_X - 1, 19, 6, 8);
     for (const x of [CROSS_X - 4, CROSS_X + 6]) b.place(x, 25, WG.lamp);
-    for (const [x, k] of [[46, 0], [54, 1], [92, 1], [100, 0]] as const) b.place(x, 26, WG.cabins[k]);
+    for (const [x, k] of [[46, 0], [54, 1], [92, 1], [100, 0]] as const) house(x, 26, WG.cabins[k], 'w_cabin');
     b.place(64, 30, WG.waterTower);
-    for (const x of [52, 98]) b.tryPlace(x, 32, WG.outhouse);
+    for (const x of [52, 98]) outhouse(x, 32);
 
     // ---------- 矿洞、瞭望台 ----------
     b.place(36, 12, WG.mine);
@@ -189,12 +202,12 @@ export function buildWestern(): MapData {
         const crop = i % 3 === 1 ? WG.chili : WG.corn;
         for (let y = py; y < py + 3; y++) for (let x = px; x < px + 5; x++) b.place(x, y - 1, crop);
     });
-    b.place(8, 50, WG.cabins[1]);
+    house(8, 50, WG.cabins[1], 'w_cabin');
     for (let x = 3; x <= 22; x++) b.place(x, 67, [[WG.fenceH]]);
 
     // ---------- 东边牧场 ----------
-    b.place(139, 36, WG.cabins[0]);
-    b.place(148, 36, WG.ranchBarn);
+    house(139, 36, WG.cabins[0], 'w_cabin');
+    house(148, 36, WG.ranchBarn, 'w_livery');
     b.place(141, 22, WG.windmill);
     spot('ranch', 141, 22, 3, 7);
     b.place(142, 30, WG.trough, true);
@@ -241,7 +254,7 @@ export function buildWestern(): MapData {
     b.walker('lady', row('lady'), [[CROSS_X + 1, 28], [CROSS_X + 1, MAIN_Y + 2]], 0.6);
     b.walker('smith', row('smith'), [[30, MAIN_Y - 2], [36, MAIN_Y - 2]], 0.5);
     b.walker('ranchKid', row('ranchKid'), [[30, BACK_Y + 1], [76, BACK_Y + 1]], 1.6);
-    b.walker('rancher', row('cowboy'), [[137, 36], [137, MAIN_Y + 2], [158, MAIN_Y + 2]], 0.8);
+    b.walker('rancher', row('rancher'), [[137, 36], [137, MAIN_Y + 2], [158, MAIN_Y + 2]], 0.8);
 
     // 主角到镇上站在主街和南北街的路口
     b.spawn = [CROSS_X + 1, MAIN_Y + 2];

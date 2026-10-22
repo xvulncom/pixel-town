@@ -11,10 +11,13 @@ import { plotIndexAt, seedChoices, tend } from '../core/fields';
 import { OfflineReport, simulate } from '../core/simulate';
 import { patrol, patrolSummary } from '../core/patrol';
 import { Rect } from '../core/screen';
-import { anchorFromCell, canPlace, clearWild, occupancy, place, removeAt, tierUnlocked, wildAt } from '../core/village';
+import { anchorFromCell, canPlace, clearWild, occupancy, place, removeAt, storedCount, tierUnlocked, wildAt } from '../core/village';
+import { DoorDef, doorAt, villageDoors } from '../core/interior';
 import { saveGame, SaveStore } from './Store';
 import { simEvents } from './Sim';
 import { VillageView } from './VillageView';
+import { MapView } from './MapView';
+import { Hero } from './Hero';
 import { ACCENT, button, Button, drawBox, GOLD, INK, label, MUTED, PAPER, uiNode } from './ui';
 
 const { ccclass } = _decorator;
@@ -22,9 +25,7 @@ const { ccclass } = _decorator;
 /** 竖屏时建造栏的高度 */
 export const PANEL_H = 330;
 const PANEL_BG = new Color(40, 30, 22, 225);
-/** 手指移动不超过这么多算点了一下，超过算拖地图。 */
-const TAP_SLOP = 12;
-const IDLE_HINT = '点菜地种菜，熟了点一下就卖钱';
+const IDLE_HINT = '点哪里走到哪里；点菜地走过去种菜，熟了点一下就卖钱';
 
 type Mode = { kind: 'idle' } | { kind: 'place'; def: BuildingDef; x: number; y: number } | { kind: 'remove' };
 
@@ -66,7 +67,10 @@ export class VillageBuild extends Component {
     private set seed(v: string) {
         this.state.farmSeed = v;
     }
-    private touchStart: Vec2 | null = null;
+    /** 主角；Boot 在地盘画好后挂上 */
+    hero: Hero | null = null;
+    /** 走到自家房子门口以后（进屋由 Boot 管） */
+    onDoor: ((door: DoorDef) => void) | null = null;
     private cardW = 140;
     private cardH = 170;
     private cols = 4;
@@ -99,9 +103,9 @@ export class VillageBuild extends Component {
             ...all.filter((d) => !tierUnlocked(this.state.village.tier, d.tier)),
         ];
 
-        const mapNode = this.view.node;
-        mapNode.on(Node.EventType.TOUCH_START, this.onMapStart, this);
-        mapNode.on(Node.EventType.TOUCH_END, this.onMapEnd, this);
+        this.view.node.getComponent(MapView)?.onTap((loc) => {
+            if (this.isValid) this.onTap(loc);
+        });
 
         this.renderCards();
         this.setMode({ kind: 'idle' });
@@ -112,11 +116,6 @@ export class VillageBuild extends Component {
 
     onDestroy(): void {
         simEvents.off('tick', this.onTick, this);
-        const mapNode = this.view?.node;
-        if (mapNode?.isValid) {
-            mapNode.off(Node.EventType.TOUCH_START, this.onMapStart, this);
-            mapNode.off(Node.EventType.TOUCH_END, this.onMapEnd, this);
-        }
     }
 
     /** 面板里的坐标：x、y 从面板左上角量，换成节点里的（原点在中心）。 */
@@ -264,7 +263,9 @@ export class VillageBuild extends Component {
             drawBox(card.addComponent(Graphics), CW, CH, selected ? ACCENT : PAPER, 12, unlocked ? INK : MUTED);
             this.icon(card, def, unlocked);
             label(card, def.name, 24, unlocked ? INK : MUTED, CW - 8, 30, 'Name').node.setPosition(0, -CH / 2 + 46, 0);
-            const sub = unlocked ? `${def.price} 金` : `${this.world.tiers[def.tier].name}解锁`;
+            // 店里买过放在仓库的，摆一件不扣钱
+            const stored = storedCount(this.state, def.id);
+            const sub = !unlocked ? `${this.world.tiers[def.tier].name}解锁` : stored > 0 ? `仓库 ${stored} 件` : `${def.price} 金`;
             label(card, sub, 22, unlocked ? GOLD : MUTED, CW - 8, 28, 'Price').node.setPosition(0, -CH / 2 + 18, 0);
             card.on(Node.EventType.TOUCH_END, () => {
                 if (!unlocked) {
@@ -331,20 +332,16 @@ export class VillageBuild extends Component {
         this.refreshGold();
     }
 
-    private onMapStart(e: EventTouch): void {
-        this.touchStart = e.getAllTouches().length === 1 ? e.getUILocation() : null;
-    }
-
-    private onMapEnd(e: EventTouch): void {
-        const start = this.touchStart;
-        this.touchStart = null;
-        if (!start || Vec2.distance(start, e.getUILocation()) > TAP_SLOP) return;
-        const cell = this.view.cellAt(e.getUILocation());
-        if (!cell) return;
+    /** 地图上点了一下（MapView 已经分好点按和拖动）。建造、拆除时直接作用在格子上；平时主角走过去。 */
+    private onTap(loc: Vec2): void {
         const m = this.mode;
         if (m.kind === 'idle') {
-            this.tendAt(cell[0], cell[1]);
-        } else if (m.kind === 'remove') {
+            this.walkTo(this.view.cellAtAny(loc));
+            return;
+        }
+        const cell = this.view.cellAt(loc);
+        if (!cell) return;
+        if (m.kind === 'remove') {
             // 空地上的天然地貌：花钱开荒（溪水上架了桥的先拆桥）
             const [cx, cy] = cell;
             const o = occupancy(this.world, this.state.village);
@@ -374,6 +371,39 @@ export class VillageBuild extends Component {
                 if (canPlace(this.world, this.state, m.def.id, x, y).ok) this.say('位置可以，点「放这里」');
             }
         }
+    }
+
+    /** 地盘上有门的房子（配了室内或标了进不去的建筑），图多高按建筑图集量 */
+    doors(): DoorDef[] {
+        return villageDoors(this.world.buildings, this.state.village.items,
+            (def) => (def.sprite ? Math.ceil(this.view.iconSize(def.sprite)[1] / 16) : def.foot[1]));
+    }
+
+    /** 平时点地面：点到房子走到门口进屋；点到菜地就走到旁边再种、浇、收；别处就走过去。主角还没出来时直接种。 */
+    private walkTo([x, y]: [number, number]): void {
+        const field = plotIndexAt(this.state, this.world, x, y) >= 0;
+        const hero = this.hero;
+        const door = field ? null : doorAt(this.doors(), x, y);
+        if (door) {
+            const [fx, fy] = door.front;
+            const enter = (ok: boolean) => (ok ? this.onDoor?.(door) : this.say('走不到门口，先铺条路过去'));
+            if (!hero?.walkTo({ x: fx, y: fy, w: 1, h: 1 }, 'onto', enter)) this.onDoor?.(door);
+            return;
+        }
+        if (!hero?.ready) {
+            if (field) this.tendAt(x, y);
+            return;
+        }
+        if (!field) {
+            hero.walkTo({ x, y, w: 1, h: 1 }, 'onto');
+            return;
+        }
+        const ok = hero.walkTo({ x, y, w: 1, h: 1 }, 'beside', (reached) => {
+            if (!this.isValid) return;
+            if (reached) this.tendAt(x, y);
+            else this.say('走不到那块菜地，先铺条路过去');
+        });
+        if (!ok) this.tendAt(x, y);
     }
 
     private tendAt(x: number, y: number): void {

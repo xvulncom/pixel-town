@@ -12,6 +12,7 @@ import { cropSprite, cropStage } from '../core/fields';
 import { borderDecor, borderGround, Decor, sceneMask } from '../core/border';
 import { GameState, VillageState } from '../core/types';
 import { uiNode } from './ui';
+import { sortIntoSiblings } from './Hero';
 
 const { ccclass } = _decorator;
 const TILE = 16;
@@ -50,6 +51,8 @@ export class VillageView extends Component {
     private borderCells: { x: number; y: number; s: Sprite }[] = [];
     private size: [number, number] = [0, 0];
     private margin = 0;
+    /** 和建筑一起排前后的人（主角）：重画时清掉的建筑层要把它们放回去 */
+    readonly actors: Node[] = [];
     private decor: Decor[] = [];
 
     start(): void {
@@ -165,6 +168,32 @@ export class VillageView extends Component {
             const [lx, ly] = this.footBottom(e.x, e.y, e.foot);
             n.setPosition(lx, ly, 0);
         }
+        for (const a of this.actors) {
+            if (!a.isValid) continue;
+            this.objectLayer.addChild(a);
+            sortIntoSiblings(a);
+        }
+    }
+
+    /** 建筑层：主角放这里，和房子、树按脚底高低排前后（走到屋后被屋顶盖住）。 */
+    get objects(): Node | null {
+        return this.objectLayer;
+    }
+
+    /** 地盘格子坐标（可带小数）换成节点坐标：那格底边中点，人的脚底。 */
+    footAt(x: number, y: number): [number, number] {
+        const t = this.node.getComponent(UITransform)!;
+        const m = this.margin;
+        return [(x + m + 0.5) * TILE - t.width / 2, t.height / 2 - (y + m + 1) * TILE];
+    }
+
+    /** 屏幕上的点落在哪一格（地盘外也算，坐标可能是负的或超出地盘）。 */
+    cellAtAny(ui: Vec2): [number, number] {
+        const t = this.node.getComponent(UITransform)!;
+        const vis = view.getVisibleSize();
+        const canvas = this.node.parent!.getComponent(UITransform)!;
+        const p = t.convertToNodeSpaceAR(canvas.convertToWorldSpaceAR(new Vec3(ui.x - vis.width / 2, ui.y - vis.height / 2, 0)));
+        return [Math.floor((p.x + t.width / 2) / TILE) - this.margin, Math.floor((t.height / 2 - p.y) / TILE) - this.margin];
     }
 
     private resize(w: number, h: number): void {
@@ -278,6 +307,22 @@ export class VillageView extends Component {
     }
 
     /** 建筑图标，建造栏用。 */
+    /** 只要图标（建筑图集）：开机直接在镇上时地盘节点没激活、start 还没跑，镇上商店先单独加载这一份 */
+    loadIcons(done: () => void): void {
+        if (this.objTex && Object.keys(this.frames).length) {
+            done();
+            return;
+        }
+        resources.load('maps/buildings', ImageAsset, (e1, img) => {
+            resources.load('maps/buildings-frames', JsonAsset, (e2, j) => {
+                if (e1 || e2 || !img || !j) return console.error('建筑图集加载失败', e1 ?? e2);
+                this.objTex ??= nearest(img);
+                if (!Object.keys(this.frames).length) this.frames = (j.json as { frames: Frames }).frames;
+                done();
+            });
+        });
+    }
+
     iconFrame(sprite: string): SpriteFrame | null {
         return this.frames[sprite] ? this.objFrame(sprite) : null;
     }

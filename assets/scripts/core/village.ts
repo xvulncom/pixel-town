@@ -3,6 +3,9 @@
 import { BuildingDef, Terrain, Tier, TIER_ORDER, WildDef, World } from './defs';
 import { fail, Failure, GameState, Placement, VillageState } from './types';
 import { syncFieldPlots } from './fields';
+import { WalkGrid } from './path';
+import { countOf, removeItem } from './inventory';
+import { buildItem } from './shop';
 
 /** 拆除退还的比例。 */
 export const REFUND_RATE = 0.5;
@@ -66,6 +69,24 @@ export function occupancy(world: World, v: VillageState): Occupancy {
     return o;
 }
 
+/**
+ * 主角在地盘里的挡路表（core/path 用）：房子、摆设、没开荒的大石老树竹丛和溪水挡路；
+ * 路、菜地、木桥能走，池塘水面挡路，标了 walkable 的建筑（晒谷场）能走。外圈远景不让进。
+ */
+export function walkGrid(world: World, v: VillageState): WalkGrid {
+    const o = occupancy(world, v);
+    const grid = terrainGrid(world, v);
+    const block = new Uint8Array(o.w * o.h);
+    const uidDef = new Map(v.items.map((it) => [it.uid, world.buildings[it.def]]));
+    for (let i = 0; i < block.length; i++) {
+        const obj = o.objects[i] ? uidDef.get(o.objects[i]) : undefined;
+        const t = grid[i];
+        const blocked = (obj && !obj.walkable) || (o.wild[i] && t !== 'wood') || t === 'water';
+        block[i] = blocked ? 1 : 0;
+    }
+    return { w: o.w, h: o.h, block };
+}
+
 function forFoot(def: BuildingDef, x0: number, y0: number, f: (x: number, y: number) => void): void {
     for (let y = y0; y < y0 + def.foot[1]; y++) for (let x = x0; x < x0 + def.foot[0]; x++) f(x, y);
 }
@@ -96,18 +117,23 @@ export function canPlaceIn(world: World, v: VillageState, defId: string, x: numb
     return reason ? fail(reason) : { ok: true };
 }
 
-/** 能不能摆，连钱一起算。 */
+/** 仓库里存着几件这种建造物（店里买的，摆的时候先用它，不扣钱） */
+export function storedCount(state: GameState, defId: string): number {
+    return countOf(state, buildItem(defId));
+}
+
+/** 能不能摆，连钱一起算：仓库里有就不看钱。 */
 export function canPlace(world: World, state: GameState, defId: string, x: number, y: number): { ok: true } | Failure {
     const r = canPlaceIn(world, state.village, defId, x, y);
     if (!r.ok) return r;
-    if (state.gold < world.buildings[defId].price) return fail('金币不够');
+    if (storedCount(state, defId) === 0 && state.gold < world.buildings[defId].price) return fail('金币不够');
     return r;
 }
 
 export function place(world: World, state: GameState, defId: string, x: number, y: number): { ok: true; item: Placement } | Failure {
     const r = canPlace(world, state, defId, x, y);
     if (!r.ok) return r;
-    state.gold -= world.buildings[defId].price;
+    if (!removeItem(state, buildItem(defId))) state.gold -= world.buildings[defId].price;
     const item = { uid: state.village.nextUid++, def: defId, x, y };
     state.village.items.push(item);
     syncFieldPlots(state, world);

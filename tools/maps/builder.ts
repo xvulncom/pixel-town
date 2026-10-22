@@ -4,6 +4,7 @@ import { EMPTY, noise2d, pick, Rnd } from '../art/canvas';
 import { mulberry32 } from '../../assets/scripts/core/rng';
 import { G } from '../art/tileset';
 import { E, N, S, W_ } from '../art/terrain';
+import { DoorDef } from '../../assets/scripts/core/interior';
 
 /** Wood 木码头、Slab 石板桥：铺在水上，底下画水。 */
 export enum Terr { Grass, Dirt, Water, Soil, Stone, Wood, Slab }
@@ -38,6 +39,8 @@ export interface MapData {
     walk: string[];
     /** 主角到镇上时站的格子 */
     spawn: [number, number];
+    /** 能进的房子（core/interior 的 DoorDef），写进 <地图>.doors.json */
+    doors: DoorDef[];
 }
 
 const flatIds = (...gs: (number[] | number[][])[]) => new Set<number>(gs.flat(2) as number[]);
@@ -60,6 +63,7 @@ export class MapBuilder {
     readonly bridge = new Set<number>();
     readonly walkers: Walker[] = [];
     readonly places: Place[] = [];
+    readonly doors: DoorDef[] = [];
     spawn: [number, number] = [0, 0];
     readonly rnd: Rnd;
 
@@ -218,6 +222,17 @@ export class MapBuilder {
         return yard;
     }
 
+    /**
+     * 登记一扇门：房子图左上角 (x, y)，图 grid；门画在底行正中，门前站人的格子是底行下面一格。
+     * recipe 是室内配方（data/interiors.ts），null 是有门进不去，locked 是那时说的话。
+     */
+    door(x: number, y: number, grid: number[][], recipe: string | null, locked?: string): void {
+        const w = grid[0].length;
+        const h = grid.length;
+        const front: [number, number] = [x + Math.floor(w / 2), y + h];
+        this.doors.push({ id: `${front[0]},${front[1]}`, x, y, w, h, front, recipe, ...(locked ? { locked } : {}) });
+    }
+
     walker(id: string, row: number, path: [number, number][], speed = 1.2): void {
         this.walkers.push({ id, row, path, speed });
     }
@@ -279,7 +294,7 @@ export class MapBuilder {
         });
         return {
             w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places,
-            walk: this.walkRows(), spawn: this.spawn,
+            walk: this.walkRows(), spawn: this.spawn, doors: this.doors,
         };
     }
 

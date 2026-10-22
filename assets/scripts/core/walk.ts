@@ -88,3 +88,21 @@ function still(path: [number, number][], d: number, back: boolean): WalkPose {
     // 停下时还朝着刚才走的方向
     return { x: p.x, y: p.y, dir: back ? flip[p.dir] : p.dir, moving: false, frame: 0 };
 }
+
+// ---------- 主角：沿寻路得到的折线走一趟（core/path 的 planWalk 给路线） ----------
+
+/** 折线总长（格）。 */
+export function pathLength(path: [number, number][]): number {
+    return routeLength(path);
+}
+
+/** 沿折线走了 d 格时的样子；d 到头就站住，朝着最后一段的方向。 */
+export function poseAlong(path: [number, number][], d: number): WalkPose {
+    const len = routeLength(path);
+    if (path.length < 2 || len === 0) {
+        const [x, y] = path[0] ?? [0, 0];
+        return { x, y, dir: 'down', moving: false, frame: 0 };
+    }
+    if (d >= len) return still(path, len, false);
+    return moving(path, Math.max(0, d), false);
+}

@@ -76,6 +76,21 @@ export interface GameState {
     workerLog: WorkerEvent[];
     /** 自己村庄的现实地点（data/places.ts 的 id），天气跟那里走；空串是跟老家镇子的原型地点。存档第 7 版加入 */
     place: string;
+    /** 人在哪：哪块场地、站在哪格、在不在屋里。存档第 8 版加入，老存档在自己地盘出生点 */
+    at: Whereabouts;
+    /** 各栋房子屋里的家具（钥匙见 core/interior 的 interiorKey）。存档第 8 版加入，现在没人写，留给以后自己家摆家具 */
+    interiors: Record<string, { items?: { f: string; x: number; y: number }[] }>;
+}
+
+/** 人在哪。x、y 为 -1 是还没走过，用那块场地的出生点。 */
+export interface Whereabouts {
+    scene: 'village' | 'town';
+    /** 在镇上时是哪座镇子（地域 id） */
+    town: string;
+    x: number;
+    y: number;
+    /** 在屋里：哪栋（钥匙）、什么配方、站在屋里哪格。出门站回 x、y（门前那格） */
+    inside: { key: string; recipe: string; x: number; y: number } | null;
 }
 
 export type PayMode = 'day' | 'piece';

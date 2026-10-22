@@ -12,8 +12,8 @@ export const NPCS: Record<string, NpcDef> = {
             + '说话带点家乡口音，喜欢叫主角小名"娃儿"，动不动就塞东西给人。',
         initialAffinity: 150,
         traits: { diligence: 0.9, laziness: 0.05, greed: 0.25 },
-        loves: ['crop:strawberry', 'crop:watermelon', 'crop:cherry'],
-        likes: ['crop:tomato', 'crop:grape', 'crop:lychee', 'crop:tangerine', 'crop:persimmon'],
+        loves: ['crop:strawberry', 'crop:watermelon', 'crop:cherry', 'gift:osmanthus_cake', 'gift:candy', 'gift:apple_pie'],
+        likes: ['crop:tomato', 'crop:grape', 'crop:lychee', 'crop:tangerine', 'crop:persimmon', 'gift:silk_hanky', 'gift:longjing', 'gift:postcard'],
         dislikes: ['crop:radish'],
         workHours: [7, 19],
         schedule: [
@@ -43,9 +43,9 @@ export const NPCS: Record<string, NpcDef> = {
             + '爱吃烤红薯，晚上喝一小盅酒，下棋输了会耍赖。',
         initialAffinity: 0,
         traits: { diligence: 0.7, laziness: 0.2, greed: 0 },
-        loves: ['crop:sweetpotato', 'crop:persimmon'],
-        likes: ['crop:corn', 'crop:napa', 'crop:pumpkin', 'wood'],
-        dislikes: ['crop:strawberry'],
+        loves: ['crop:sweetpotato', 'crop:persimmon', 'gift:longjing'],
+        likes: ['crop:corn', 'crop:napa', 'crop:pumpkin', 'wood', 'gift:rice_cake', 'gift:jerky', 'gift:horseshoe'],
+        dislikes: ['crop:strawberry', 'gift:candy'],
         workHours: [6, 17],
         schedule: [
             { hour: 5, place: 'zhou_home', activity: '起床' },

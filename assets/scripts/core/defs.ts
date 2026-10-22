@@ -185,6 +185,12 @@ export interface BuildingDef {
     terrain?: Terrain;
     /** 只能铺在没开荒的水面上（木桥） */
     onWater?: boolean;
+    /** building 用：人能从上面走过（晒谷场这种平地）；默认挡路 */
+    walkable?: boolean;
+    /** 有门能进屋：data/interiors.ts 的室内配方；null 是有门但进不去（说 locked）；不填就没有门 */
+    interior?: string | null;
+    /** 进不去时说的话 */
+    locked?: string;
 }
 
 /** 自己地盘外面一圈装饰（只画不存档、不能摆东西）。sprite 名对应 buildings.png 里的图，数字是权重。 */

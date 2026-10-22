@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseOpenMeteo, setRealWeather, tableOf, wmoWeather, openMeteoUrls } from '../assets/scripts/core/realWeather';
 import { placeWeather, weatherOn } from '../assets/scripts/core/weather';
 import { villagePlace } from '../assets/scripts/core/region';
-import { newGame, serialize, deserialize } from '../assets/scripts/core/game';
+import { newGame, serialize, deserialize, SAVE_VERSION } from '../assets/scripts/core/game';
 import { simulate } from '../assets/scripts/core/simulate';
 import { plant } from '../assets/scripts/core/farm';
 import { PLACES, PLACE_ORDER } from '../assets/scripts/data/places';
@@ -74,7 +74,7 @@ test('村庄地点：没选跟老家原型地点；存档第 6 版读进来补�
     old.version = 6;
     const back = deserialize(JSON.stringify(old), WORLD);
     assert.equal(back.place, '');
-    assert.equal(back.version, 7);
+    assert.equal(back.version, SAVE_VERSION);
 });
 
 test('沙尘暴：作物当天不长、浇的水被吹干；第二天照常长', () => {

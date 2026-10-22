@@ -109,7 +109,7 @@ export class DesertBuilder extends MapBuilder {
         });
         return {
             w: this.w, h: this.h, ground, deco: this.deco, over: this.over, walkers: this.walkers, places: this.places,
-            walk: this.desertWalkRows(), spawn: this.spawn,
+            walk: this.desertWalkRows(), spawn: this.spawn, doors: this.doors,
         };
     }
 
